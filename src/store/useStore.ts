@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { supabase } from '../lib/supabase';
 
 export type Role = 'ADMIN' | 'USER';
 
@@ -20,11 +20,11 @@ export interface SpiritualData {
 export interface User {
   id: string;
   role: Role;
-  isMaster?: boolean; // Flag para identificar o admin geral do sistema
-  isPanelAdmin?: boolean; // Administrador de todo o painel (pode ver todos os terreiros)
+  isMaster?: boolean;
+  isPanelAdmin?: boolean;
   cpf: string;
   password?: string;
-  palavraChave?: string; // Usada para recuperação de senha
+  palavraChave?: string;
   nomeCompleto: string;
   nomeDeSanto: string;
   dataNascimento: string;
@@ -34,10 +34,10 @@ export interface User {
   email?: string;
   profissao?: string;
   nomePais?: string;
-  photoUrl?: string; // Base64 profile photo
+  photoUrl?: string;
   spiritual: SpiritualData;
   createdAt: string;
-  terreiroId: string; // Multi-tenant: vincula usuário a um terreiro
+  terreiroId: string;
 }
 
 export interface Event {
@@ -46,7 +46,7 @@ export interface Event {
   date: string;
   description: string;
   createdBy: string;
-  terreiroId: string; // Multi-tenant: vincula evento a um terreiro
+  terreiroId: string;
 }
 
 export type ChargeType = 'Mensalidade' | 'Colaboração' | 'Evento' | 'Outros';
@@ -59,9 +59,9 @@ export interface Charge {
   type: ChargeType;
   amount: number;
   dueDate: string;
-  assignedTo: string[]; // IDs de usuários ou IDs de terreiros (depende de targetType)
-  paidBy: string[]; // IDs de usuários ou IDs de terreiros que pagaram
-  notifiedBy: string[]; // IDs de quem avisou que pagou (aguarda confirmação)
+  assignedTo: string[];
+  paidBy: string[];
+  notifiedBy: string[];
   createdAt: string;
   targetType?: 'USER' | 'SYSTEM';
 }
@@ -83,14 +83,13 @@ export interface Terreiro {
   name: string;
   logoUrl: string;
   endereco: string;
-  adminId: string; // ID do administrador local
-  masterId?: string; // ID do Master que criou/gerencia o SaaS
-  pixKey?: string; // Chave PIX para recebimentos dos membros
-  isBlocked?: boolean; // Controle SaaS
+  adminId: string;
+  masterId?: string;
+  pixKey?: string;
+  isBlocked?: boolean;
 }
 
 interface AppState {
-  // Data
   terreiros: Terreiro[];
   users: User[];
   events: Event[];
@@ -102,6 +101,7 @@ interface AppState {
   masterPixKey: string;
   setMasterPixKey: (key: string) => void;
   theme: 'dark' | 'light';
+  initialized: boolean;
 
   // Computed / Selectors
   getCurrentTerreiro: () => Terreiro | undefined;
@@ -115,6 +115,7 @@ interface AppState {
   getBankAccountsForCurrentTerreiro: () => BankAccount[];
 
   // Actions
+  initializeData: () => Promise<void>;
   checkCpf: (cpf: string) => Promise<{ exists: boolean; hasPassword: boolean; userName?: string }>;
   setupPassword: (cpf: string, password: string, palavraChave?: string) => Promise<boolean>;
   recoverPassword: (cpf: string, palavraChave: string, novaSenha: string) => Promise<boolean>;
@@ -141,55 +142,752 @@ interface AppState {
   resetStore: () => void;
 }
 
-// ─── Seed Data: Master Admin ───────────────────────────
+// ─── Helpers: convert DB row ↔ App model ──────────────────────
 
-const TERREIRO_1: Terreiro = {
-  id: 'terreiro-001',
-  name: 'Terreiro de Umbanda Luz Divina',
-  logoUrl: '',
-  endereco: 'Rua da Luz, 100 - Centro',
-  adminId: 'user-admin-001'
-};
+function dbToTerreiro(row: any): Terreiro {
+  return {
+    id: row.id,
+    name: row.name,
+    logoUrl: row.logo_url || '',
+    endereco: row.endereco || '',
+    adminId: row.admin_id || '',
+    masterId: row.master_id,
+    pixKey: row.pix_key,
+    isBlocked: row.is_blocked || false,
+  };
+}
 
-const ADMIN_1: User = {
-  id: 'user-admin-001',
-  role: 'ADMIN',
-  isMaster: true,
-  cpf: 'master',
-  password: '123',
-  nomeCompleto: 'Pai João da Luz',
-  nomeDeSanto: 'Pai João',
-  dataNascimento: '1980-01-01',
-  rg: '0000000',
-  endereco: 'Rua da Luz, 100',
-  telefone: '(11) 99999-9999',
-  email: 'admin@luzdivina.com',
-  profissao: 'Sacerdote',
-  nomePais: '',
-  spiritual: {
-    tempoUmbanda: '20 anos',
-    religiaoAnterior: '',
-    orixaFrente: 'Oxalá',
-    orixaAdjunto: 'Iemanjá',
-    tipoMedium: 'Sacerdote',
-    chefeCoroa: '',
-    orixas: ['Oxalá', 'Iemanjá'],
-    entidades: ['Caboclo', 'Preto Velho'],
-    paiDeSantoAnterior: '',
-    dataEntrada: '2000-01-01',
-    historicoObrigacoes: 'Feitura completa.'
+function dbToUser(row: any): User {
+  return {
+    id: row.id,
+    role: row.role as Role,
+    isMaster: row.is_master || false,
+    isPanelAdmin: row.is_panel_admin || false,
+    cpf: row.cpf,
+    password: row.password,
+    palavraChave: row.palavra_chave,
+    nomeCompleto: row.nome_completo,
+    nomeDeSanto: row.nome_de_santo || '',
+    dataNascimento: row.data_nascimento || '',
+    rg: row.rg || '',
+    endereco: row.endereco || '',
+    telefone: row.telefone || '',
+    email: row.email || '',
+    profissao: row.profissao || '',
+    nomePais: row.nome_pais || '',
+    photoUrl: row.photo_url || '',
+    spiritual: row.spiritual || { tempoUmbanda: '', religiaoAnterior: '', orixaFrente: '', orixaAdjunto: '', tipoMedium: '', chefeCoroa: '', orixas: [], entidades: [], paiDeSantoAnterior: '', dataEntrada: '', historicoObrigacoes: '' },
+    createdAt: row.created_at,
+    terreiroId: row.terreiro_id,
+  };
+}
+
+function dbToEvent(row: any): Event {
+  return {
+    id: row.id,
+    title: row.title,
+    date: row.date,
+    description: row.description || '',
+    createdBy: row.created_by || '',
+    terreiroId: row.terreiro_id,
+  };
+}
+
+function dbToCharge(row: any): Charge {
+  return {
+    id: row.id,
+    terreiroId: row.terreiro_id,
+    title: row.title,
+    description: row.description || '',
+    type: row.type as ChargeType,
+    amount: Number(row.amount),
+    dueDate: row.due_date || '',
+    assignedTo: row.assigned_to || [],
+    paidBy: row.paid_by || [],
+    notifiedBy: row.notified_by || [],
+    createdAt: row.created_at,
+    targetType: row.target_type,
+  };
+}
+
+function dbToBankAccount(row: any): BankAccount {
+  return {
+    id: row.id,
+    terreiroId: row.terreiro_id,
+    bankName: row.bank_name,
+    agency: row.agency || '',
+    accountNumber: row.account_number || '',
+    accountType: row.account_type as 'Corrente' | 'Poupança',
+    pixKey: row.pix_key || '',
+    ownerName: row.owner_name || '',
+    ownerDocument: row.owner_document || '',
+  };
+}
+
+// ─── Store ─────────────────────────────────────────────────────
+
+export const useStore = create<AppState>()((set, get) => ({
+  terreiros: [],
+  users: [],
+  events: [],
+  charges: [],
+  bankAccounts: [],
+  currentUser: null,
+  currentTerreiroId: null,
+  isLoading: false,
+  theme: (localStorage.getItem('terreiro-theme') as 'dark' | 'light') || 'dark',
+  masterPixKey: 'financeiro@terreiras.app',
+  initialized: false,
+
+  setMasterPixKey: (key) => set({ masterPixKey: key }),
+
+  // ─── Initialize: fetch all data from Supabase ──────────
+  initializeData: async () => {
+    if (get().initialized) return;
+    set({ isLoading: true });
+    try {
+      const [terreiroRes, userRes, eventRes, chargeRes, bankRes] = await Promise.all([
+        supabase.from('terreiros').select('*'),
+        supabase.from('users').select('*'),
+        supabase.from('events').select('*'),
+        supabase.from('charges').select('*'),
+        supabase.from('bank_accounts').select('*'),
+      ]);
+
+      set({
+        terreiros: (terreiroRes.data || []).map(dbToTerreiro),
+        users: (userRes.data || []).map(dbToUser),
+        events: (eventRes.data || []).map(dbToEvent),
+        charges: (chargeRes.data || []).map(dbToCharge),
+        bankAccounts: (bankRes.data || []).map(dbToBankAccount),
+        initialized: true,
+      });
+    } catch (err) {
+      console.error('Erro ao carregar dados do Supabase:', err);
+    } finally {
+      set({ isLoading: false });
+    }
   },
-  createdAt: new Date().toISOString(),
-  terreiroId: 'terreiro-001'
-};
 
-const simulateDelay = () => new Promise(resolve => setTimeout(resolve, 300));
+  // ─── Selectors ──────────────────────────────────────────
+  getCurrentTerreiro: () => {
+    const { terreiros, currentTerreiroId } = get();
+    return terreiros.find(t => t.id === currentTerreiroId);
+  },
 
-export const useStore = create<AppState>()(
-  persist(
-    (set, get) => ({
-      terreiros: [TERREIRO_1],
-      users: [ADMIN_1],
+  getFilteredUsers: () => {
+    const { users, currentTerreiroId } = get();
+    if (!currentTerreiroId) return [];
+    return users.filter(u => u.terreiroId === currentTerreiroId);
+  },
+
+  getFilteredEvents: () => {
+    const { events, currentTerreiroId } = get();
+    if (!currentTerreiroId) return [];
+    return events.filter(e => e.terreiroId === currentTerreiroId);
+  },
+
+  getUserTerreiros: () => {
+    const { currentUser, terreiros } = get();
+    if (!currentUser) return [];
+    if (currentUser.isMaster || currentUser.isPanelAdmin) return terreiros;
+    return terreiros.filter(t => t.id === currentUser.terreiroId);
+  },
+
+  getFilteredCharges: () => {
+    const { charges, currentTerreiroId } = get();
+    if (!currentTerreiroId) return [];
+    return charges.filter(c => c.terreiroId === currentTerreiroId && (!c.targetType || c.targetType === 'USER'));
+  },
+
+  getMyCharges: () => {
+    const { charges, currentUser } = get();
+    if (!currentUser) return [];
+    return charges.filter(c => c.terreiroId === currentUser.terreiroId && c.assignedTo.includes(currentUser.id) && (!c.targetType || c.targetType === 'USER'));
+  },
+
+  getSystemChargesForCurrentTerreiro: () => {
+    const { charges, currentTerreiroId } = get();
+    if (!currentTerreiroId) return [];
+    return charges.filter(c => c.targetType === 'SYSTEM' && c.assignedTo.includes(currentTerreiroId));
+  },
+
+  getSystemChargesIssuedByMaster: () => {
+    const { charges, currentTerreiroId, currentUser } = get();
+    if (!currentUser?.isMaster && !currentUser?.isPanelAdmin) return [];
+    return charges.filter(c => c.targetType === 'SYSTEM' && c.terreiroId === currentTerreiroId);
+  },
+
+  getBankAccountsForCurrentTerreiro: () => {
+    const { bankAccounts, currentTerreiroId } = get();
+    if (!currentTerreiroId) return [];
+    return bankAccounts.filter(b => b.terreiroId === currentTerreiroId);
+  },
+
+  // ─── Auth Actions ───────────────────────────────────────
+  checkCpf: async (cpf) => {
+    set({ isLoading: true });
+    try {
+      const normalizedCpf = cpf.trim().toLowerCase();
+      const { data } = await supabase
+        .from('users')
+        .select('id, nome_completo, password')
+        .ilike('cpf', normalizedCpf)
+        .limit(1);
+
+      const user = data?.[0];
+      return {
+        exists: !!user,
+        hasPassword: !!user?.password,
+        userName: user?.nome_completo
+      };
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  setupPassword: async (cpf, password, palavraChave) => {
+    set({ isLoading: true });
+    try {
+      const normalizedCpf = cpf.trim().toLowerCase();
+      const updateData: any = { password };
+      if (palavraChave) updateData.palavra_chave = palavraChave.trim().toLowerCase();
+
+      const { error } = await supabase
+        .from('users')
+        .update(updateData)
+        .ilike('cpf', normalizedCpf);
+
+      if (error) return false;
+
+      // Update local state
+      const users = get().users.map(u =>
+        u.cpf.trim().toLowerCase() === normalizedCpf
+          ? { ...u, password, ...(palavraChave && { palavraChave: palavraChave.trim().toLowerCase() }) }
+          : u
+      );
+      set({ users });
+      return true;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  recoverPassword: async (cpf, palavraChave, novaSenha) => {
+    set({ isLoading: true });
+    try {
+      const normalizedCpf = cpf.trim().toLowerCase();
+      const normalizedPalavra = palavraChave.trim().toLowerCase();
+
+      // Check if user exists with matching palavra_chave
+      const { data } = await supabase
+        .from('users')
+        .select('id, palavra_chave')
+        .ilike('cpf', normalizedCpf)
+        .limit(1);
+
+      const user = data?.[0];
+      if (!user || user.palavra_chave !== normalizedPalavra) return false;
+
+      const { error } = await supabase
+        .from('users')
+        .update({ password: novaSenha })
+        .eq('id', user.id);
+
+      if (error) return false;
+
+      const users = get().users.map(u =>
+        u.id === user.id ? { ...u, password: novaSenha } : u
+      );
+      set({ users });
+      return true;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  login: async (cpf, password) => {
+    set({ isLoading: true });
+    try {
+      const normalizedCpf = cpf.trim().toLowerCase();
+
+      // Ensure data is loaded
+      if (!get().initialized) {
+        await get().initializeData();
+      }
+
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .ilike('cpf', normalizedCpf)
+        .limit(1);
+
+      const row = data?.[0];
+      if (row && row.password && row.password === password) {
+        const user = dbToUser(row);
+        set({ currentUser: user, currentTerreiroId: user.terreiroId });
+        // Save session in localStorage for persistence
+        localStorage.setItem('terreiro-session', JSON.stringify({ userId: user.id, terreiroId: user.terreiroId }));
+        return true;
+      }
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  logout: () => {
+    set({ currentUser: null, currentTerreiroId: null });
+    localStorage.removeItem('terreiro-session');
+  },
+
+  toggleTheme: () => {
+    const newTheme = get().theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('terreiro-theme', newTheme);
+    set({ theme: newTheme });
+  },
+
+  switchTerreiro: (terreiroId) => {
+    set({ currentTerreiroId: terreiroId });
+    const session = localStorage.getItem('terreiro-session');
+    if (session) {
+      const parsed = JSON.parse(session);
+      parsed.terreiroId = terreiroId;
+      localStorage.setItem('terreiro-session', JSON.stringify(parsed));
+    }
+  },
+
+  // ─── Terreiro Actions ───────────────────────────────────
+  addTerreiro: async (terreiroData) => {
+    set({ isLoading: true });
+    try {
+      const { currentUser } = get();
+      const { data, error } = await supabase
+        .from('terreiros')
+        .insert({
+          name: terreiroData.name,
+          logo_url: terreiroData.logoUrl || '',
+          endereco: terreiroData.endereco || '',
+          admin_id: currentUser?.id || '',
+          master_id: currentUser?.isMaster ? currentUser.id : null,
+          pix_key: terreiroData.pixKey || null,
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        set({ terreiros: [...get().terreiros, dbToTerreiro(data)] });
+      }
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateTerreiro: async (id, terreiroData) => {
+    set({ isLoading: true });
+    try {
+      const updateData: any = {};
+      if (terreiroData.name !== undefined) updateData.name = terreiroData.name;
+      if (terreiroData.logoUrl !== undefined) updateData.logo_url = terreiroData.logoUrl;
+      if (terreiroData.endereco !== undefined) updateData.endereco = terreiroData.endereco;
+      if (terreiroData.pixKey !== undefined) updateData.pix_key = terreiroData.pixKey;
+      if (terreiroData.isBlocked !== undefined) updateData.is_blocked = terreiroData.isBlocked;
+
+      await supabase.from('terreiros').update(updateData).eq('id', id);
+
+      set({
+        terreiros: get().terreiros.map(t => t.id === id ? { ...t, ...terreiroData } : t),
+      });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  toggleBlockTerreiro: async (id, blocked) => {
+    set({ isLoading: true });
+    try {
+      await supabase.from('terreiros').update({ is_blocked: blocked }).eq('id', id);
+      set({
+        terreiros: get().terreiros.map(t => t.id === id ? { ...t, isBlocked: blocked } : t),
+      });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  deleteTerreiro: async (id) => {
+    set({ isLoading: true });
+    try {
+      await supabase.from('terreiros').delete().eq('id', id);
+      set({
+        terreiros: get().terreiros.filter(t => t.id !== id),
+        users: get().users.filter(u => u.terreiroId !== id),
+        charges: get().charges.filter(c => c.terreiroId !== id),
+      });
+      if (get().currentTerreiroId === id) {
+        const next = get().terreiros[0];
+        if (next) set({ currentTerreiroId: next.id });
+      }
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  registerTerreiro: async (terreiroData, adminData) => {
+    set({ isLoading: true });
+    try {
+      const { currentUser } = get();
+
+      // Check CPF
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id')
+        .ilike('cpf', adminData.cpf.trim().toLowerCase())
+        .limit(1);
+      if (existing && existing.length > 0) return false;
+
+      // Create terreiro
+      const { data: newTerreiro, error: tErr } = await supabase
+        .from('terreiros')
+        .insert({
+          name: terreiroData.name,
+          endereco: terreiroData.endereco,
+          logo_url: '',
+          admin_id: '',
+          master_id: currentUser?.isMaster ? currentUser.id : null,
+        })
+        .select()
+        .single();
+
+      if (tErr || !newTerreiro) return false;
+
+      // Create admin user
+      const { data: newAdmin, error: uErr } = await supabase
+        .from('users')
+        .insert({
+          role: 'ADMIN',
+          cpf: adminData.cpf,
+          password: adminData.password || null,
+          nome_completo: adminData.nomeCompleto,
+          nome_de_santo: adminData.nomeDeSanto || '',
+          data_nascimento: adminData.dataNascimento || '',
+          rg: adminData.rg || '',
+          endereco: adminData.endereco || '',
+          telefone: adminData.telefone || '',
+          email: adminData.email || '',
+          profissao: adminData.profissao || '',
+          nome_pais: adminData.nomePais || '',
+          spiritual: adminData.spiritual || {},
+          terreiro_id: newTerreiro.id,
+        })
+        .select()
+        .single();
+
+      if (uErr || !newAdmin) return false;
+
+      // Update terreiro with admin_id
+      await supabase.from('terreiros').update({ admin_id: newAdmin.id }).eq('id', newTerreiro.id);
+
+      set({
+        terreiros: [...get().terreiros, dbToTerreiro({ ...newTerreiro, admin_id: newAdmin.id })],
+        users: [...get().users, dbToUser(newAdmin)],
+      });
+      return true;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  // ─── User Actions ───────────────────────────────────────
+  addUser: async (userData) => {
+    set({ isLoading: true });
+    try {
+      const { currentTerreiroId } = get();
+      if (!currentTerreiroId) return;
+
+      const { data, error } = await supabase
+        .from('users')
+        .insert({
+          role: userData.role,
+          is_master: userData.isMaster || false,
+          is_panel_admin: userData.isPanelAdmin || false,
+          cpf: userData.cpf,
+          password: userData.password || null,
+          nome_completo: userData.nomeCompleto,
+          nome_de_santo: userData.nomeDeSanto || '',
+          data_nascimento: userData.dataNascimento || '',
+          rg: userData.rg || '',
+          endereco: userData.endereco || '',
+          telefone: userData.telefone || '',
+          email: userData.email || '',
+          profissao: userData.profissao || '',
+          nome_pais: userData.nomePais || '',
+          photo_url: userData.photoUrl || '',
+          spiritual: userData.spiritual || {},
+          terreiro_id: currentTerreiroId,
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        set({ users: [...get().users, dbToUser(data)] });
+      }
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateUser: async (id, userData) => {
+    set({ isLoading: true });
+    try {
+      const updateData: any = {};
+      if (userData.nomeCompleto !== undefined) updateData.nome_completo = userData.nomeCompleto;
+      if (userData.nomeDeSanto !== undefined) updateData.nome_de_santo = userData.nomeDeSanto;
+      if (userData.dataNascimento !== undefined) updateData.data_nascimento = userData.dataNascimento;
+      if (userData.rg !== undefined) updateData.rg = userData.rg;
+      if (userData.endereco !== undefined) updateData.endereco = userData.endereco;
+      if (userData.telefone !== undefined) updateData.telefone = userData.telefone;
+      if (userData.email !== undefined) updateData.email = userData.email;
+      if (userData.profissao !== undefined) updateData.profissao = userData.profissao;
+      if (userData.nomePais !== undefined) updateData.nome_pais = userData.nomePais;
+      if (userData.photoUrl !== undefined) updateData.photo_url = userData.photoUrl;
+      if (userData.spiritual !== undefined) updateData.spiritual = userData.spiritual;
+      if (userData.cpf !== undefined) updateData.cpf = userData.cpf;
+      if (userData.password !== undefined) updateData.password = userData.password;
+      if (userData.role !== undefined) updateData.role = userData.role;
+
+      await supabase.from('users').update(updateData).eq('id', id);
+
+      set({
+        users: get().users.map(u => u.id === id ? { ...u, ...userData } : u),
+      });
+
+      // Update currentUser if editing self
+      const { currentUser } = get();
+      if (currentUser && currentUser.id === id) {
+        set({ currentUser: { ...currentUser, ...userData } });
+      }
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  deleteUser: async (id) => {
+    set({ isLoading: true });
+    try {
+      await supabase.from('users').delete().eq('id', id);
+      set({
+        users: get().users.filter(u => u.id !== id),
+        charges: get().charges.filter(c => !c.assignedTo.includes(id)),
+      });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  // ─── Event Actions ──────────────────────────────────────
+  addEvent: async (eventData) => {
+    set({ isLoading: true });
+    try {
+      const { currentTerreiroId } = get();
+      if (!currentTerreiroId) return;
+
+      const { data, error } = await supabase
+        .from('events')
+        .insert({
+          title: eventData.title,
+          date: eventData.date,
+          description: eventData.description || '',
+          created_by: eventData.createdBy || '',
+          terreiro_id: currentTerreiroId,
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        set({ events: [...get().events, dbToEvent(data)] });
+      }
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  // ─── Charge Actions ─────────────────────────────────────
+  addCharge: async (chargeData) => {
+    set({ isLoading: true });
+    try {
+      const { currentTerreiroId } = get();
+      if (!currentTerreiroId) return;
+
+      const { data, error } = await supabase
+        .from('charges')
+        .insert({
+          terreiro_id: currentTerreiroId,
+          title: chargeData.title,
+          description: chargeData.description || '',
+          type: chargeData.type,
+          amount: chargeData.amount,
+          due_date: chargeData.dueDate || '',
+          assigned_to: chargeData.assignedTo || [],
+          paid_by: chargeData.paidBy || [],
+          notified_by: chargeData.notifiedBy || [],
+          target_type: chargeData.targetType || null,
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        set({ charges: [...get().charges, dbToCharge(data)] });
+      }
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateCharge: async (id, data) => {
+    set({ isLoading: true });
+    try {
+      const updateData: any = {};
+      if (data.title !== undefined) updateData.title = data.title;
+      if (data.description !== undefined) updateData.description = data.description;
+      if (data.amount !== undefined) updateData.amount = data.amount;
+      if (data.dueDate !== undefined) updateData.due_date = data.dueDate;
+      if (data.assignedTo !== undefined) updateData.assigned_to = data.assignedTo;
+      if (data.paidBy !== undefined) updateData.paid_by = data.paidBy;
+      if (data.notifiedBy !== undefined) updateData.notified_by = data.notifiedBy;
+
+      await supabase.from('charges').update(updateData).eq('id', id);
+
+      set({
+        charges: get().charges.map(c => c.id === id ? { ...c, ...data } : c),
+      });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  markChargeAsPaid: async (chargeId, userId, isPaid) => {
+    set({ isLoading: true });
+    try {
+      const charge = get().charges.find(c => c.id === chargeId);
+      if (!charge) return;
+
+      let newPaidBy = [...charge.paidBy];
+      let newNotifiedBy = [...(charge.notifiedBy || [])];
+
+      if (isPaid) {
+        if (!newPaidBy.includes(userId)) newPaidBy.push(userId);
+        newNotifiedBy = newNotifiedBy.filter(id => id !== userId);
+      } else {
+        newPaidBy = newPaidBy.filter(id => id !== userId);
+      }
+
+      await supabase.from('charges').update({
+        paid_by: newPaidBy,
+        notified_by: newNotifiedBy,
+      }).eq('id', chargeId);
+
+      set({
+        charges: get().charges.map(c =>
+          c.id === chargeId ? { ...c, paidBy: newPaidBy, notifiedBy: newNotifiedBy } : c
+        ),
+      });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  notifyPayment: async (chargeId, userId) => {
+    set({ isLoading: true });
+    try {
+      const charge = get().charges.find(c => c.id === chargeId);
+      if (!charge) return;
+
+      const newNotifiedBy = [...(charge.notifiedBy || [])];
+      if (!newNotifiedBy.includes(userId)) newNotifiedBy.push(userId);
+
+      await supabase.from('charges').update({ notified_by: newNotifiedBy }).eq('id', chargeId);
+
+      set({
+        charges: get().charges.map(c =>
+          c.id === chargeId ? { ...c, notifiedBy: newNotifiedBy } : c
+        ),
+      });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  // ─── Bank Account Actions ──────────────────────────────
+  addBankAccount: async (accountData) => {
+    set({ isLoading: true });
+    try {
+      const { currentTerreiroId } = get();
+      if (!currentTerreiroId) return;
+
+      const { data, error } = await supabase
+        .from('bank_accounts')
+        .insert({
+          terreiro_id: currentTerreiroId,
+          bank_name: accountData.bankName,
+          agency: accountData.agency || '',
+          account_number: accountData.accountNumber || '',
+          account_type: accountData.accountType || 'Corrente',
+          pix_key: accountData.pixKey || '',
+          owner_name: accountData.ownerName || '',
+          owner_document: accountData.ownerDocument || '',
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        set({ bankAccounts: [...get().bankAccounts, dbToBankAccount(data)] });
+      }
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateBankAccount: async (id, data) => {
+    set({ isLoading: true });
+    try {
+      const updateData: any = {};
+      if (data.bankName !== undefined) updateData.bank_name = data.bankName;
+      if (data.agency !== undefined) updateData.agency = data.agency;
+      if (data.accountNumber !== undefined) updateData.account_number = data.accountNumber;
+      if (data.accountType !== undefined) updateData.account_type = data.accountType;
+      if (data.pixKey !== undefined) updateData.pix_key = data.pixKey;
+      if (data.ownerName !== undefined) updateData.owner_name = data.ownerName;
+      if (data.ownerDocument !== undefined) updateData.owner_document = data.ownerDocument;
+
+      await supabase.from('bank_accounts').update(updateData).eq('id', id);
+
+      set({
+        bankAccounts: get().bankAccounts.map(b => b.id === id ? { ...b, ...data } : b),
+      });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  deleteBankAccount: async (id) => {
+    set({ isLoading: true });
+    try {
+      await supabase.from('bank_accounts').delete().eq('id', id);
+      set({
+        bankAccounts: get().bankAccounts.filter(b => b.id !== id),
+      });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  resetStore: () => {
+    localStorage.removeItem('terreiro-session');
+    localStorage.removeItem('terreiro-theme');
+    set({
+      terreiros: [],
+      users: [],
       events: [],
       charges: [],
       bankAccounts: [],
@@ -197,457 +895,8 @@ export const useStore = create<AppState>()(
       currentTerreiroId: null,
       isLoading: false,
       theme: 'dark',
-      masterPixKey: 'financeiro@terreiras.app',
-      setMasterPixKey: (key) => set({ masterPixKey: key }),
-
-      // ─── Selectors ──────────────────────────────────────
-      getCurrentTerreiro: () => {
-        const { terreiros, currentTerreiroId } = get();
-        return terreiros.find(t => t.id === currentTerreiroId);
-      },
-
-      getFilteredUsers: () => {
-        const { users, currentTerreiroId } = get();
-        if (!currentTerreiroId) return [];
-        return users.filter(u => u.terreiroId === currentTerreiroId);
-      },
-
-      getFilteredEvents: () => {
-        const { events, currentTerreiroId } = get();
-        if (!currentTerreiroId) return [];
-        return events.filter(e => e.terreiroId === currentTerreiroId);
-      },
-
-      getUserTerreiros: () => {
-        const { currentUser, terreiros } = get();
-        if (!currentUser) return [];
-        if (currentUser.isMaster || currentUser.isPanelAdmin) {
-          return terreiros; // Master e Panel Admin veem todos os terreiros
-        }
-        // Administradores e usuários comuns vêm apenas o terreiro ao qual pertencem
-        return terreiros.filter(t => t.id === currentUser.id || t.id === currentUser.terreiroId);
-      },
-
-      getFilteredCharges: () => {
-        const { charges, currentTerreiroId } = get();
-        if (!currentTerreiroId) return [];
-        return charges.filter(c => c.terreiroId === currentTerreiroId && (!c.targetType || c.targetType === 'USER'));
-      },
-
-      getMyCharges: () => {
-        const { charges, currentUser } = get();
-        if (!currentUser) return [];
-        return charges.filter(c => c.terreiroId === currentUser.terreiroId && c.assignedTo.includes(currentUser.id) && (!c.targetType || c.targetType === 'USER'));
-      },
-
-      getSystemChargesForCurrentTerreiro: () => {
-        const { charges, currentTerreiroId } = get();
-        if (!currentTerreiroId) return [];
-        return charges.filter(c => c.targetType === 'SYSTEM' && c.assignedTo.includes(currentTerreiroId));
-      },
-
-      getSystemChargesIssuedByMaster: () => {
-         const { charges, currentTerreiroId, currentUser } = get();
-         if (!currentUser?.isMaster && !currentUser?.isPanelAdmin) return [];
-         return charges.filter(c => c.targetType === 'SYSTEM' && c.terreiroId === currentTerreiroId);
-      },
-
-      getBankAccountsForCurrentTerreiro: () => {
-        const { bankAccounts, currentTerreiroId } = get();
-        if (!currentTerreiroId) return [];
-        return bankAccounts.filter(b => b.terreiroId === currentTerreiroId);
-      },
-
-      // ─── Actions ─────────────────────────────────────────
-      checkCpf: async (cpf) => {
-        set({ isLoading: true });
-        try {
-          await simulateDelay();
-          const normalizedCpf = cpf.trim().toLowerCase();
-          const user = get().users.find(u => u.cpf.trim().toLowerCase() === normalizedCpf);
-          return { 
-            exists: !!user, 
-            hasPassword: !!user?.password,
-            userName: user?.nomeCompleto
-          };
-        } finally {
-          set({ isLoading: false });
-        }
-      },
-
-      setupPassword: async (cpf, password, palavraChave) => {
-        set({ isLoading: true });
-        try {
-          await simulateDelay();
-          const users = get().users;
-          const normalizedCpf = cpf.trim().toLowerCase();
-          const userIndex = users.findIndex(u => u.cpf.trim().toLowerCase() === normalizedCpf);
-          
-          if (userIndex === -1) return false;
-
-          const updatedUsers = [...users];
-          updatedUsers[userIndex] = { 
-            ...updatedUsers[userIndex], 
-            password,
-            ...(palavraChave && { palavraChave: palavraChave.trim().toLowerCase() })
-          };
-          set({ users: updatedUsers });
-          return true;
-        } finally {
-          set({ isLoading: false });
-        }
-      },
-
-      recoverPassword: async (cpf, palavraChave, novaSenha) => {
-        set({ isLoading: true });
-        try {
-          await simulateDelay();
-          const users = get().users;
-          const normalizedCpf = cpf.trim().toLowerCase();
-          const normalizedPalavra = palavraChave.trim().toLowerCase();
-          
-          const userIndex = users.findIndex(u => u.cpf.trim().toLowerCase() === normalizedCpf);
-          if (userIndex === -1) return false;
-          
-          const user = users[userIndex];
-          if (!user.palavraChave || user.palavraChave !== normalizedPalavra) return false;
-
-          const updatedUsers = [...users];
-          updatedUsers[userIndex] = { ...user, password: novaSenha };
-          set({ users: updatedUsers });
-          return true;
-        } finally {
-          set({ isLoading: false });
-        }
-      },
-
-      login: async (cpf, password) => {
-        set({ isLoading: true });
-        try {
-          await simulateDelay();
-          const normalizedCpf = cpf.trim().toLowerCase();
-          const user = get().users.find(u => u.cpf.trim().toLowerCase() === normalizedCpf);
-          
-          if (user && user.password && user.password === password) {
-            set({
-              currentUser: user,
-              currentTerreiroId: user.terreiroId
-            });
-            return true;
-          }
-          return false;
-        } finally {
-          set({ isLoading: false });
-        }
-      },
-
-      logout: () => {
-        set({ currentUser: null, currentTerreiroId: null });
-      },
-
-      toggleTheme: () => {
-        set({ theme: get().theme === 'dark' ? 'light' : 'dark' });
-      },
-
-      switchTerreiro: (terreiroId) => {
-        set({ currentTerreiroId: terreiroId });
-      },
-
-      addTerreiro: async (terreiroData) => {
-        set({ isLoading: true });
-        try {
-          await simulateDelay();
-          const { currentUser } = get();
-          const newTerreiro: Terreiro = {
-            ...terreiroData,
-            id: `terr-${Date.now()}`,
-            adminId: currentUser?.id || '',
-            masterId: currentUser?.isMaster ? currentUser.id : undefined
-          };
-          set({ terreiros: [...get().terreiros, newTerreiro] });
-        } finally {
-          set({ isLoading: false });
-        }
-      },
-
-      updateTerreiro: async (id, terreiroData) => {
-        set({ isLoading: true });
-        await simulateDelay();
-        set({
-          terreiros: get().terreiros.map(t => t.id === id ? { ...t, ...terreiroData } : t),
-          isLoading: false
-        });
-      },
-
-      toggleBlockTerreiro: async (id, blocked) => {
-        set({ isLoading: true });
-        await simulateDelay();
-        set({
-          terreiros: get().terreiros.map(t => t.id === id ? { ...t, isBlocked: blocked } : t),
-          isLoading: false
-        });
-      },
-
-      deleteTerreiro: async (id) => {
-        set({ isLoading: true });
-        await simulateDelay();
-        // Remove terreiro, seus membros e suas cobranças
-        set({
-          terreiros: get().terreiros.filter(t => t.id !== id),
-          users: get().users.filter(u => u.terreiroId !== id),
-          charges: get().charges.filter(c => c.terreiroId !== id),
-          isLoading: false
-        });
-        // Se deletou o terreiro atual, troca para o primeiro disponível
-        const state = get();
-        if (state.currentTerreiroId === id) {
-          const nextTerreiro = state.terreiros[0];
-          if (nextTerreiro) {
-            set({ currentTerreiroId: nextTerreiro.id });
-          }
-        }
-      },
-
-      registerTerreiro: async (terreiroData, adminData) => {
-        set({ isLoading: true });
-        try {
-          await simulateDelay();
-          const { currentUser } = get();
-
-          // Verificar se CPF já existe
-          const existingUser = get().users.find(u => u.cpf === adminData.cpf);
-          if (existingUser) return false;
-
-          const terreiroId = `terreiro-${Date.now()}`;
-          const adminId = `user-${Date.now() + 1}`;
-
-          const newTerreiro: Terreiro = {
-            id: terreiroId,
-            name: terreiroData.name,
-            logoUrl: '',
-            endereco: terreiroData.endereco,
-            adminId: adminId,
-            masterId: currentUser?.isMaster ? currentUser.id : undefined
-          };
-
-          const newAdmin: User = {
-            ...adminData,
-            id: adminId,
-            role: 'ADMIN',
-            createdAt: new Date().toISOString(),
-            terreiroId: terreiroId
-          };
-
-          set({
-            terreiros: [...get().terreiros, newTerreiro],
-            users: [...get().users, newAdmin]
-          });
-
-          return true;
-        } finally {
-          set({ isLoading: false });
-        }
-      },
-
-      addUser: async (userData) => {
-        set({ isLoading: true });
-        await simulateDelay();
-        const { currentTerreiroId } = get();
-        if (!currentTerreiroId) {
-          set({ isLoading: false });
-          return;
-        }
-        const newUser: User = {
-          ...userData,
-          id: `user-${Date.now()}`,
-          createdAt: new Date().toISOString(),
-          terreiroId: currentTerreiroId // Auto-vincula ao terreiro ativo
-        };
-        set({ users: [...get().users, newUser], isLoading: false });
-      },
-
-      updateUser: async (id, userData) => {
-        set({ isLoading: true });
-        await simulateDelay();
-        set({
-          users: get().users.map(u => u.id === id ? { ...u, ...userData } : u),
-          isLoading: false
-        });
-      },
-
-      deleteUser: async (id) => {
-        set({ isLoading: true });
-        await simulateDelay();
-        set({
-          users: get().users.filter(u => u.id !== id),
-          // Também remove cobranças vinculadas (opcional, mas limpa o banco)
-          charges: get().charges.filter(c => !c.assignedTo.includes(id)),
-          isLoading: false
-        });
-      },
-
-      addEvent: async (eventData) => {
-        set({ isLoading: true });
-        await simulateDelay();
-        const { currentTerreiroId } = get();
-        if (!currentTerreiroId) {
-          set({ isLoading: false });
-          return;
-        }
-        const newEvent: Event = {
-          ...eventData,
-          id: `evt-${Date.now()}`,
-          terreiroId: currentTerreiroId // Auto-vincula ao terreiro ativo
-        };
-        set({ events: [...get().events, newEvent], isLoading: false });
-      },
-
-      addCharge: async (chargeData) => {
-        set({ isLoading: true });
-        await simulateDelay();
-        const { currentTerreiroId } = get();
-        if (!currentTerreiroId) {
-          set({ isLoading: false });
-          return;
-        }
-        const newCharge: Charge = {
-          ...chargeData,
-          id: `charge-${Date.now()}`,
-          terreiroId: currentTerreiroId,
-          createdAt: new Date().toISOString()
-        };
-        set({ charges: [...get().charges, newCharge], isLoading: false });
-      },
-
-      updateCharge: async (id, data) => {
-        set({ isLoading: true });
-        await simulateDelay();
-        set({
-          charges: get().charges.map(c => c.id === id ? { ...c, ...data } : c),
-          isLoading: false
-        });
-      },
-
-      markChargeAsPaid: async (chargeId, userId, isPaid) => {
-        set({ isLoading: true });
-        try {
-          await simulateDelay();
-          const charges = get().charges;
-          const updatedCharges = charges.map(c => {
-            if (c.id === chargeId) {
-              let newPaidBy = [...c.paidBy];
-              let newNotifiedBy = c.notifiedBy ? [...c.notifiedBy] : [];
-
-              if (isPaid) {
-                if (!newPaidBy.includes(userId)) newPaidBy.push(userId);
-                newNotifiedBy = newNotifiedBy.filter(id => id !== userId);
-              } else {
-                newPaidBy = newPaidBy.filter(id => id !== userId);
-              }
-
-              return { ...c, paidBy: newPaidBy, notifiedBy: newNotifiedBy };
-            }
-            return c;
-          });
-
-          set({ charges: updatedCharges });
-        } finally {
-          set({ isLoading: false });
-        }
-      },
-
-      notifyPayment: async (chargeId, userId) => {
-        set({ isLoading: true });
-        try {
-          await simulateDelay();
-          const charges = get().charges;
-          const updatedCharges = charges.map(c => {
-            if (c.id === chargeId) {
-              const newNotifiedBy = c.notifiedBy ? [...c.notifiedBy] : [];
-              if (!newNotifiedBy.includes(userId)) {
-                newNotifiedBy.push(userId);
-              }
-              return { ...c, notifiedBy: newNotifiedBy };
-            }
-            return c;
-          });
-
-          set({ charges: updatedCharges });
-        } finally {
-          set({ isLoading: false });
-        }
-      },
-
-      addBankAccount: async (accountData) => {
-        set({ isLoading: true });
-        await simulateDelay();
-        const { currentTerreiroId } = get();
-        if (!currentTerreiroId) {
-          set({ isLoading: false });
-          return;
-        }
-        const newBankAccount: BankAccount = {
-          ...accountData,
-          id: `bank-${Date.now()}`,
-          terreiroId: currentTerreiroId
-        };
-        set({ bankAccounts: [...get().bankAccounts, newBankAccount], isLoading: false });
-      },
-
-      updateBankAccount: async (id, data) => {
-        set({ isLoading: true });
-        await simulateDelay();
-        set({
-          bankAccounts: get().bankAccounts.map(b => b.id === id ? { ...b, ...data } : b),
-          isLoading: false
-        });
-      },
-
-      deleteBankAccount: async (id) => {
-        set({ isLoading: true });
-        await simulateDelay();
-        set({
-          bankAccounts: get().bankAccounts.filter(b => b.id !== id),
-          isLoading: false
-        });
-      },
-
-      resetStore: () => {
-        set({
-          terreiros: [TERREIRO_1],
-          users: [ADMIN_1],
-          events: [],
-          charges: [],
-          bankAccounts: [],
-          currentUser: null,
-          currentTerreiroId: null,
-          isLoading: false,
-          theme: 'dark'
-        });
-        localStorage.removeItem('terreiro-storage');
-        window.location.reload();
-      },
-    }),
-    {
-      name: 'terreiro-storage',
-      version: 9, // Bump: Remove test data, keep only Master
-      migrate: (_persistedState: any, version: number) => {
-        if (version < 9) {
-          // Reset completo — removidos terreiros e membros de teste
-          return {
-            terreiros: [TERREIRO_1],
-            users: [ADMIN_1],
-            events: [],
-            charges: [],
-            bankAccounts: [],
-            currentUser: null,
-            currentTerreiroId: null,
-            isLoading: false,
-            theme: 'dark'
-          };
-        }
-        return _persistedState;
-      }
-    }
-  )
-);
+      initialized: false,
+    });
+    window.location.reload();
+  },
+}));
