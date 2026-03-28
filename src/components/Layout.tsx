@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useStore } from '../store/useStore';
-import { LayoutDashboard, Users, Calendar, Settings, LogOut, Hexagon, Search, Bell, ChevronDown, Building2, DollarSign, Lock, Sparkles, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Settings, LogOut, Hexagon, Search, Bell, ChevronDown, Building2, DollarSign, Lock, Sparkles, Sun, Moon, Menu, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import bgImage from '../assets/bg.png';
@@ -17,6 +17,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [showTerreiroDropdown, setShowTerreiroDropdown] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   if (!currentUser) {
     return <Navigate to="/login" replace />;
@@ -71,8 +72,11 @@ export default function Layout() {
       </div>
 
       <div className="app-layout">
+        {/* Mobile Overlay */}
+        {mobileMenuOpen && <div className="mobile-overlay" onClick={() => setMobileMenuOpen(false)} />}
+
         {/* Sidebar */}
-        <aside className="sidebar glass-panel">
+        <aside className={`sidebar glass-panel ${mobileMenuOpen ? 'sidebar-open' : ''}`}>
           <div className="logo-container">
             {currentTerreiro?.logoUrl ? (
                <img src={currentTerreiro.logoUrl} alt="Logo" style={{ width: 32, height: 32, borderRadius: 8 }} />
@@ -168,7 +172,7 @@ export default function Layout() {
               <button
                 key={item.id}
                 className={`nav-item ${location.pathname.startsWith(item.path) ? 'active' : ''}`}
-                onClick={() => navigate(item.path)}
+                onClick={() => { navigate(item.path); setMobileMenuOpen(false); }}
               >
                 <item.icon size={20} className="nav-icon" />
                 <span>{item.label}</span>
@@ -176,7 +180,7 @@ export default function Layout() {
             ))}
           </nav>
 
-          <button className="nav-item" onClick={handleLogout} style={{ color: '#ff4c4c', marginTop: 'auto' }}>
+          <button className="nav-item" onClick={() => { handleLogout(); setMobileMenuOpen(false); }} style={{ color: '#ff4c4c', marginTop: 'auto' }}>
             <LogOut size={20} className="nav-icon" />
             <span>Sair</span>
           </button>
@@ -185,6 +189,9 @@ export default function Layout() {
         {/* Main Content */}
         <main className="main-content">
           <header className="header glass-panel">
+            <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
             <div className="search-bar">
               <Search size={18} className="search-icon" />
               <input type="text" placeholder="Buscar..." className="search-input" />
