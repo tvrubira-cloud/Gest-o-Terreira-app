@@ -69,21 +69,38 @@ const DATABASE_ESTUDOS: SearchResult[] = [
 // Busca pontos por relevância de termos
 function searchLocalPontos(query: string): SearchResult[] {
   if (!query.trim()) return PONTOS_DATABASE.slice(0, 8);
-  // Permitimos termos com 2 ou mais caracteres após normalização
-  const terms = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).filter(t => t.length >= 2);
+  
+  const normalizedQuery = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const terms = normalizedQuery.split(/\s+/).filter(t => t.length >= 2);
   
   if (terms.length === 0) return [];
 
   const scored = PONTOS_DATABASE.map(item => {
-    const searchable = [item.title, item.artist || '', item.type || '', item.tags || '']
-      .join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const titleNorm = item.title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const tagsNorm = (item.tags || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const artistNorm = (item.artist || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const typeNorm = (item.type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    
+    const allWords = [
+      ...titleNorm.split(/\s+/),
+      ...tagsNorm.split(/\s+/),
+      ...artistNorm.split(/\s+/),
+      ...typeNorm.split(/\s+/)
+    ];
+
     let score = 0;
     for (const t of terms) {
-      if (searchable.includes(t)) {
-        score += 1;
-        // Bônus para termo exato
-        if (searchable.split(/\s+/).includes(t)) score += 2;
+      // Check if any word in the item EXACTLY matches the term
+      if (allWords.some(word => word === t)) {
+        score += 10;
+      } else if (allWords.some(word => word.startsWith(t))) {
+        // Bonus for word starting with the term
+        score += 5;
       }
+
+      // Bonus for terms in critical fields
+      if (titleNorm.includes(t)) score += 2;
+      if (tagsNorm.includes(t)) score += 1;
     }
     return { item, score };
   }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
