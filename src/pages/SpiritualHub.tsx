@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Music, Leaf, BookOpen, Sparkles, Send, ArrowLeft } from 'lucide-react';
+import { Search, Music, Leaf, Sparkles, Send, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-type Tab = 'pontos' | 'ervas' | 'estudos';
+type Tab = 'pontos' | 'ervas';
 
 interface SearchResult {
   id: string;
@@ -58,12 +58,6 @@ const DATABASE_ERVAS: SearchResult[] = [
   { id: 'i2', title: 'Guiné', use: 'Corte de negatividades e Proteção', property: 'Erva Quente (Cortadora)', description: 'A Guiné possui fitoenergia cortadora de raízes fluídicas negativas.\n\nPrincipais Utilizações:\n- Bate-folha para descarrego de ambientes.\n- Fechamento de corpo energético contra vampirismo espiritual.\n- Banhos em confluência com a espada de São Jorge e Arruda.\n\nRegência: Orixá Ogum e Linha de Baianos.', source: 'internal' },
   { id: 'g1', title: 'Manjericão (Alfavaca)', use: 'Equilíbrio, Paz e Elevação', property: 'Erva Morna (Equilibradora)', description: 'Planta de alta vibração positiva, atua diretamente no chakra cardíaco e coronário.\n\nPrincipais Utilizações:\n- Banhos de coroa (pode ir na cabeça).\n- Fortalecimento da aura, trazendo paz interior e harmonia.\n- Preparação de médiuns (Amaci) para conexão com as esferas superiores.\n\nRegência: Oxalá e Iemanjá.', source: 'global_archive' },
   { id: 'g2', title: 'Alecrim', use: 'Alegria, Purificação e Clareza Mental', property: 'Erva Fria/Morna (Atratora)', description: 'O Alecrim é o "Detergente do Astral". Ele ilumina os pensamentos e purifica bloqueios emocionais.\n\nPrincipais Utilizações:\n- Afastar quadros de tristeza ou obsessão suave.\n- Trazer clareza mediúnica e foco.\n- Excelente para ambientes de estudo espiritual.\n\nRegência: Oxalá, Oxóssi e Linha das Crianças (Erês).', source: 'global_archive' },
-];
-
-const DATABASE_ESTUDOS: SearchResult[] = [
-  { id: 'i1', title: 'Bases da Mediunidade', description: 'A mediunidade não é um dom exclusivo, mas uma sensibilidade inerente à alma humana. Este estudo cobre:\n\n1. Tipos de Mediunidade (Incorporação, Clarividência, Audiência, Intuição).\n2. Mecanismos Fluídicos (Ectoplasma e Plexos).\n3. O Desenvolvimento Seguro: A importância da disciplina moral e da corrente do Terreiro para evitar sintonias com espíritos sofredores ou zombeteiros.', source: 'internal' },
-  { id: 'g1', title: 'Os 7 Orixás e as 7 Linhas da Umbanda', description: 'As Sete Linhas representam os Sete Sentidos da Vida emanados pelo Criador (Olorum):\n\n- Oxalá (Fé)\n- Oxum (Amor)\n- Oxóssi (Conhecimento)\n- Xangô (Justiça)\n- Ogum (Lei)\n- Obaluayê (Evolução)\n- Iemanjá (Geração)\n\nCada linha vibra numa cor, num elemento da natureza e governa um aspecto do comportamento humano e espiritual.', source: 'global_archive' },
-  { id: 'g2', title: 'Linha de Esquerda: Exu e Pomba Gira', description: 'Estudo Teológico sobre os Guardiões do Astral.\n\nDiferente de mitos e sincretismos inadequadas da sociedade profana, a Esquerda atua na execução da Lei e da Ordem nos planos densos.\n- Exu: Vitalidade, Caminhos, Proteção contra energias intrusas.\n- Pomba Gira: Estímulo, transformation de sentimentos estagnados e desfazimento de magias negativas.\n- Exu Mirim: Descomplicador de energias densas, intenções veladas e feitiços primários.', source: 'global_archive' },
 ];
 
 // Busca pontos por relevância de termos
@@ -196,20 +190,6 @@ export default function SpiritualHub() {
         }];
       }
       setResults(filtered.length > 0 ? filtered : DATABASE_ERVAS);
-    } else {
-      const lowerTerm = term.toLowerCase();
-      let filtered = DATABASE_ESTUDOS.filter(item =>
-        !lowerTerm || item.title.toLowerCase().includes(lowerTerm) || (item.description && item.description.toLowerCase().includes(lowerTerm))
-      );
-      if (term.length >= 3) {
-        filtered = [...filtered, {
-          id: `dyn-estudo-${Date.now()}`,
-          title: `Acervo Teológico: ${term}`,
-          description: `Resumo compilado pela IA Espiritual sobre "${term}":\n\nReúne textos sagrados, tradições orais, livros de fundamentos e documentos dos principais focos umbandistas e africanistas mundiais.\n\nContexto Histórico:\nAnalisa as raízes ancestrais das Tribos Africanas (Ketu, Angola, Jeje), dos povos Originários Brasileiros (Pajelança e Catimbó) e a adoção sincretista no Brasil Colônia.\n\nFundamentos Teóricos:\nMecânica mediúnica — Ectoplasma, Leis Cósmicas de Atração, Ação/Reação (Karma/Dharma) e imantação das forças elementais.\n\n[Referências: Deep Spiritual Web / Biblioteca de Aruanda]`,
-          source: 'global_archive',
-        }];
-      }
-      setResults(filtered.length > 0 ? filtered : DATABASE_ESTUDOS);
     }
 
     setIsSearching(false);
@@ -264,13 +244,6 @@ export default function SpiritualHub() {
         >
           <Leaf size={18} style={{ marginRight: 8 }} />
           Busca Global de Ervas
-        </button>
-        <button
-          className={`ia-tab ${activeTab === 'estudos' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('estudos'); setResults(DATABASE_ESTUDOS); setSearchQuery(''); }}
-        >
-          <BookOpen size={18} style={{ marginRight: 8 }} />
-          Base Mundial de Estudos
         </button>
       </div>
 
@@ -329,7 +302,6 @@ export default function SpiritualHub() {
                     <h3 style={{ color: 'var(--text-main)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       {activeTab === 'pontos' && <Music size={18} color="var(--neon-cyan)" />}
                       {activeTab === 'ervas' && <Leaf size={18} color="var(--neon-cyan)" />}
-                      {activeTab === 'estudos' && <BookOpen size={18} color="var(--neon-cyan)" />}
                       {item.title}
                     </h3>
                     <span style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 800, whiteSpace: 'nowrap', ...getSourceStyle(item.source) }}>
@@ -384,15 +356,6 @@ export default function SpiritualHub() {
                     </div>
                   )}
 
-                  {activeTab === 'estudos' && item.description && (
-                    <div style={{ marginTop: '0.5rem' }}>
-                      <div className="glass-panel text-content" style={{ padding: '1.2rem', background: 'rgba(255,255,255,0.02)', borderRadius: 12, borderLeft: item.source === 'global_archive' ? '4px solid var(--neon-purple)' : '4px solid var(--neon-cyan)' }}>
-                        <p style={{ color: 'var(--text-main)', lineHeight: 1.7, fontSize: '0.95rem', whiteSpace: 'pre-wrap', margin: 0 }}>
-                          {item.description}
-                        </p>
-                      </div>
-                    </div>
-                  )}
                   
                   {item.source === 'global_archive' && (
                     <button

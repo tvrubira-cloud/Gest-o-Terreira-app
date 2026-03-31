@@ -5,6 +5,7 @@ import { Building2, Search, Edit2, Plus, ArrowLeft, Upload, X, Trash2, Lock, Unl
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { compressImage } from '../utils/image';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 export default function Terreiros() {
   const { currentUser, getUserTerreiros, switchTerreiro, currentTerreiroId, addTerreiro, updateTerreiro, deleteTerreiro, toggleBlockTerreiro } = useStore();
@@ -16,6 +17,11 @@ export default function Terreiros() {
   const [view, setView] = useState<'LIST' | 'FORM'>('LIST');
   const [editingTerreiro, setEditingTerreiro] = useState<Partial<Terreiro> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string; name: string }>({
+    isOpen: false,
+    id: '',
+    name: ''
+  });
 
   // Hook para transição automática caso usuário não seja admin
   useEffect(() => {
@@ -200,11 +206,7 @@ export default function Terreiros() {
 
                       {isMaster && (
                         <button 
-                          onClick={async () => {
-                            if (window.confirm(`ATENÇÃO: Deseja realmente excluir o terreiro "${t.name}"? Todos os membros e cobranças vinculadas a esta casa serão apagados permanentemente!`)) {
-                              await deleteTerreiro(t.id);
-                            }
-                          }}
+                          onClick={() => setDeleteModal({ isOpen: true, id: t.id, name: t.name })}
                           className="icon-btn" 
                           style={{ background: 'transparent', color: '#ff4c4c' }}
                           title="Excluir Terreiro"
@@ -302,6 +304,22 @@ export default function Terreiros() {
           </div>
         </form>
       )}
+
+      <ConfirmationModal 
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ ...deleteModal, isOpen: false })}
+        onConfirm={async () => {
+          try {
+            await deleteTerreiro(deleteModal.id);
+          } catch (err) {
+            alert("Erro ao excluir terreiro. Verifique se você tem permissão ou se restam dependências.");
+          }
+        }}
+        title="Excluir Terreiro"
+        message={`ATENÇÃO: Deseja realmente excluir o terreiro "${deleteModal.name}"? Todos os membros, eventos e cobranças vinculadas a esta casa serão apagados permanentemente!`}
+        confirmLabel="Sim, Excluir Tudo"
+        cancelLabel="Cancelar"
+      />
     </motion.div>
   );
 }

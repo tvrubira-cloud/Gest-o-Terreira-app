@@ -13,12 +13,39 @@ export default function RegisterTerreiro() {
   const [error, setError] = useState('');
   const [terreiroName, setTerreiroName] = useState('');
   const [terreiroEndereco, setTerreiroEndereco] = useState('');
+  const [terreiroCep, setTerreiroCep] = useState('');
+  const [terreiroCidade, setTerreiroCidade] = useState('');
+  const [terreiroEstado, setTerreiroEstado] = useState('');
+  
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [nomeDeSanto, setNomeDeSanto] = useState('');
   const [telefone, setTelefone] = useState('');
   const [email, setEmail] = useState('');
+  const [isSearchingCep, setIsSearchingCep] = useState(false);
+
+  const handleCepLookup = async (cep: string) => {
+    const cleanCep = cep.replace(/\D/g, '');
+    if (cleanCep.length !== 8) return;
+
+    setIsSearchingCep(true);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await response.json();
+      
+      if (!data.erro) {
+        setTerreiroCep(data.cep);
+        setTerreiroEndereco(`${data.logradouro}${data.bairro ? `, ${data.bairro}` : ''}`);
+        setTerreiroCidade(data.localidade);
+        setTerreiroEstado(data.uf);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar CEP:', error);
+    } finally {
+      setIsSearchingCep(false);
+    }
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +57,13 @@ export default function RegisterTerreiro() {
     }
 
     const success = await registerTerreiro(
-      { name: terreiroName, endereco: terreiroEndereco },
+      { 
+        name: terreiroName, 
+        endereco: terreiroEndereco,
+        cep: terreiroCep,
+        cidade: terreiroCidade,
+        estado: terreiroEstado
+      },
       {
         cpf,
         password,
@@ -38,23 +71,49 @@ export default function RegisterTerreiro() {
         nomeDeSanto,
         dataNascimento: '',
         rg: '',
-        endereco: '',
+        endereco: terreiroEndereco,
+        cep: terreiroCep,
+        cidade: terreiroCidade,
+        estado: terreiroEstado,
         telefone,
         email,
+        whatsapp: telefone,
         profissao: '',
         nomePais: '',
         spiritual: {
-          tempoUmbanda: '',
-          religiaoAnterior: '',
-          orixaFrente: '',
-          orixaAdjunto: '',
-          tipoMedium: 'Sacerdote',
-          chefeCoroa: '',
-          orixas: [],
-          entidades: [],
-          paiDeSantoAnterior: '',
-          dataEntrada: new Date().toISOString().split('T')[0],
-          historicoObrigacoes: ''
+          situacaoCadastro: 'ativo',
+          segmentoUmbanda: true,
+          segmentoKimbanda: false,
+          segmentoNacao: false,
+          cidadeEstadoOrigem: '',
+          umbandaOrigem: '',
+          umbandaObrigaCabeca: '',
+          umbandaObrigaCorpo: '',
+          umbandaObs: '',
+          umbandaAnteriorMata: '',
+          umbandaAnteriorMar: '',
+          umbandaAnteriorEntidades: '',
+          umbandaAnteriorCaboclo: '',
+          umbandaAnteriorPretoVelho: '',
+          quimbandaOrigem: '',
+          quimbandaObrigaFrente: '',
+          quimbandaObrigaCompanheiro: '',
+          quimbandaObs: '',
+          quimbandaCruzamentos: '',
+          quimbandaAssentamentos: '',
+          quimbandaKaballah: '',
+          nacaoOrigem: '',
+          nacaoObrigaCabeca: '',
+          nacaoObrigaCorpo: '',
+          nacaoObrigaPes: '',
+          nacaoPassagem: '',
+          nacaoObs: '',
+          obrigacoes: [
+            { data: '', descricao: '' },
+            { data: '', descricao: '' },
+            { data: '', descricao: '' }
+          ],
+          tipoMedium: 'Sacerdote'
         }
       }
     );
@@ -185,6 +244,21 @@ export default function RegisterTerreiro() {
                   style={inputStyle}
                   required
                 />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', position: 'relative' }}>
+                <label style={labelStyle}>CEP da Casa</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    placeholder="00000-000"
+                    value={terreiroCep}
+                    onChange={e => setTerreiroCep(e.target.value)}
+                    onBlur={e => handleCepLookup(e.target.value)}
+                    onFocus={handleFocus}
+                    style={inputStyle}
+                  />
+                  {isSearchingCep && <div className="spin" style={{ position: 'absolute', right: 10, top: 12, border: '2px solid #00f0ff', borderTopColor: 'transparent', borderRadius: '50%', width: 18, height: 18, animation: 'spin 1s linear infinite' }} />}
+                </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <label style={labelStyle}>Endereço da Casa</label>
@@ -350,6 +424,10 @@ export default function RegisterTerreiro() {
       </div>
 
       <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }

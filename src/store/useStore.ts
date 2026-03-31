@@ -4,18 +4,95 @@ import { supabase } from '../lib/supabase';
 export type Role = 'ADMIN' | 'USER';
 
 export interface SpiritualData {
-  tempoUmbanda: string;
-  religiaoAnterior: string;
-  orixaFrente: string;
-  orixaAdjunto: string;
-  tipoMedium: string;
-  chefeCoroa: string;
-  orixas: string[];
-  entidades: string[];
-  paiDeSantoAnterior: string;
-  dataEntrada: string;
-  historicoObrigacoes: string;
+  // Novos campos
+  situacaoCadastro: 'ativo' | 'inativo';
+  segmentoUmbanda: boolean;
+  segmentoKimbanda: boolean;
+  segmentoNacao: boolean;
+  cidadeEstadoOrigem: string;
+  cep?: string;
+  cidade?: string;
+  estado?: string;
+  whatsapp?: string;
+
+  // Umbanda
+  umbandaOrigem: string;
+  umbandaObrigaCabeca: string;
+  umbandaObrigaCorpo: string;
+  umbandaObs: string;
+  umbandaAnteriorMata: string;
+  umbandaAnteriorMar: string;
+  umbandaAnteriorEntidades: string;
+  umbandaAnteriorCaboclo: string;
+  umbandaAnteriorPretoVelho: string;
+
+  // Quimbanda
+  quimbandaOrigem: string;
+  quimbandaObrigaFrente: string;
+  quimbandaObrigaCompanheiro: string;
+  quimbandaObs: string;
+  quimbandaCruzamentos: string;
+  quimbandaAssentamentos: string;
+  quimbandaKaballah: string;
+
+  // Nação
+  nacaoOrigem: string;
+  nacaoObrigaCabeca: string;
+  nacaoObrigaCorpo: string;
+  nacaoObrigaPes: string;
+  nacaoPassagem: string;
+  nacaoObs: string;
+
+  // Cronograma
+  obrigacoes: { data: string; descricao: string }[];
+  
+  // Retro-compatibility fields
+  orixaFrente?: string;
+  tempoUmbanda?: string;
+  tipoMedium?: string;
 }
+
+export const defaultSpiritualData: SpiritualData = {
+  situacaoCadastro: 'ativo',
+  segmentoUmbanda: false,
+  segmentoKimbanda: false,
+  segmentoNacao: false,
+  cidadeEstadoOrigem: '',
+  cep: '',
+  cidade: '',
+  estado: '',
+  whatsapp: '',
+  umbandaOrigem: '',
+  umbandaObrigaCabeca: '',
+  umbandaObrigaCorpo: '',
+  umbandaObs: '',
+  umbandaAnteriorMata: '',
+  umbandaAnteriorMar: '',
+  umbandaAnteriorEntidades: '',
+  umbandaAnteriorCaboclo: '',
+  umbandaAnteriorPretoVelho: '',
+  quimbandaOrigem: '',
+  quimbandaObrigaFrente: '',
+  quimbandaObrigaCompanheiro: '',
+  quimbandaObs: '',
+  quimbandaCruzamentos: '',
+  quimbandaAssentamentos: '',
+  quimbandaKaballah: '',
+  nacaoOrigem: '',
+  nacaoObrigaCabeca: '',
+  nacaoObrigaCorpo: '',
+  nacaoObrigaPes: '',
+  nacaoPassagem: '',
+  nacaoObs: '',
+  obrigacoes: [
+    { data: '', descricao: '' },
+    { data: '', descricao: '' },
+    { data: '', descricao: '' }
+  ],
+  orixaFrente: '',
+  tempoUmbanda: '',
+  tipoMedium: ''
+};
 
 export interface User {
   id: string;
@@ -30,8 +107,12 @@ export interface User {
   dataNascimento: string;
   rg: string;
   endereco: string;
+  cep?: string;
+  cidade?: string;
+  estado?: string;
   telefone: string;
   email?: string;
+  whatsapp?: string;
   profissao?: string;
   nomePais?: string;
   photoUrl?: string;
@@ -83,10 +164,14 @@ export interface Terreiro {
   name: string;
   logoUrl: string;
   endereco: string;
+  cep?: string;
+  cidade?: string;
+  estado?: string;
   adminId: string;
   masterId?: string;
   pixKey?: string;
   isBlocked?: boolean;
+  createdAt: string;
 }
 
 interface AppState {
@@ -123,11 +208,14 @@ interface AppState {
   logout: () => void;
   toggleTheme: () => void;
   switchTerreiro: (terreiroId: string) => void;
-  addTerreiro: (terreiroData: Omit<Terreiro, 'id'>) => Promise<void>;
+  addTerreiro: (terreiroData: Omit<Terreiro, 'id' | 'createdAt'>) => Promise<void>;
   updateTerreiro: (id: string, terreiroData: Partial<Terreiro>) => Promise<void>;
   deleteTerreiro: (id: string) => Promise<void>;
   toggleBlockTerreiro: (id: string, blocked: boolean) => Promise<void>;
-  registerTerreiro: (terreiroData: { name: string; endereco: string }, adminData: Omit<User, 'id' | 'createdAt' | 'terreiroId' | 'role'>) => Promise<boolean>;
+  registerTerreiro: (
+    terreiroData: { name: string; endereco: string; cep?: string; cidade?: string; estado?: string },
+    adminData: Omit<User, 'id' | 'createdAt' | 'terreiroId' | 'role'>
+  ) => Promise<boolean>;
   addUser: (userData: Omit<User, 'id' | 'createdAt' | 'terreiroId'>) => Promise<void>;
   updateUser: (id: string, userData: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
@@ -150,10 +238,14 @@ function dbToTerreiro(row: any): Terreiro {
     name: row.name,
     logoUrl: row.logo_url || '',
     endereco: row.endereco || '',
+    cep: row.cep || '',
+    cidade: row.cidade || '',
+    estado: row.estado || '',
     adminId: row.admin_id || '',
     masterId: row.master_id,
     pixKey: row.pix_key,
     isBlocked: row.is_blocked || false,
+    createdAt: row.created_at,
   };
 }
 
@@ -176,7 +268,7 @@ function dbToUser(row: any): User {
     profissao: row.profissao || '',
     nomePais: row.nome_pais || '',
     photoUrl: row.photo_url || '',
-    spiritual: row.spiritual || { tempoUmbanda: '', religiaoAnterior: '', orixaFrente: '', orixaAdjunto: '', tipoMedium: '', chefeCoroa: '', orixas: [], entidades: [], paiDeSantoAnterior: '', dataEntrada: '', historicoObrigacoes: '' },
+    spiritual: row.spiritual || defaultSpiritualData,
     createdAt: row.created_at,
     terreiroId: row.terreiro_id,
   };
@@ -518,16 +610,28 @@ export const useStore = create<AppState>()((set, get) => ({
   deleteTerreiro: async (id) => {
     set({ isLoading: true });
     try {
-      await supabase.from('terreiros').delete().eq('id', id);
+      console.log('Tentando excluir terreiro:', id);
+      const { error } = await supabase.from('terreiros').delete().eq('id', id);
+      if (error) {
+        console.error('Erro de deleção do Supabase (terreiro):', error);
+        throw error;
+      }
+
       set({
         terreiros: get().terreiros.filter(t => t.id !== id),
         users: get().users.filter(u => u.terreiroId !== id),
         charges: get().charges.filter(c => c.terreiroId !== id),
+        events: get().events.filter(e => e.terreiroId !== id),
+        bankAccounts: get().bankAccounts.filter(b => b.terreiroId !== id),
       });
+      
       if (get().currentTerreiroId === id) {
-        const next = get().terreiros[0];
-        if (next) set({ currentTerreiroId: next.id });
+        const remaining = get().terreiros.filter(t => t.id !== id);
+        set({ currentTerreiroId: remaining.length > 0 ? remaining[0].id : null });
       }
+    } catch (err) {
+      console.error('Error deleting terreiro:', err);
+      throw err;
     } finally {
       set({ isLoading: false });
     }
@@ -547,7 +651,7 @@ export const useStore = create<AppState>()((set, get) => ({
       if (existing && existing.length > 0) return false;
 
       // Create terreiro
-      const { data: newTerreiro, error: tErr } = await supabase
+      const { data: newTerreiro, error: tError } = await supabase
         .from('terreiros')
         .insert({
           name: terreiroData.name,
@@ -559,7 +663,11 @@ export const useStore = create<AppState>()((set, get) => ({
         .select()
         .single();
 
-      if (tErr || !newTerreiro) return false;
+      if (tError || !newTerreiro) {
+        console.error('Error creating terreiro:', tError);
+        set({ isLoading: false });
+        return false;
+      }
 
       // Create admin user
       const { data: newAdmin, error: uErr } = await supabase
@@ -577,7 +685,13 @@ export const useStore = create<AppState>()((set, get) => ({
           email: adminData.email || '',
           profissao: adminData.profissao || '',
           nome_pais: adminData.nomePais || '',
-          spiritual: adminData.spiritual || {},
+          spiritual: {
+            ...adminData.spiritual,
+            cep: adminData.cep || adminData.spiritual?.cep || '',
+            cidade: adminData.cidade || adminData.spiritual?.cidade || '',
+            estado: adminData.estado || adminData.spiritual?.estado || '',
+            whatsapp: adminData.whatsapp || adminData.spiritual?.whatsapp || adminData.telefone || '',
+          },
           terreiro_id: newTerreiro.id,
         })
         .select()
@@ -623,7 +737,13 @@ export const useStore = create<AppState>()((set, get) => ({
           profissao: userData.profissao || '',
           nome_pais: userData.nomePais || '',
           photo_url: userData.photoUrl || '',
-          spiritual: userData.spiritual || {},
+          spiritual: {
+            ...userData.spiritual,
+            cep: userData.cep || userData.spiritual?.cep || '',
+            cidade: userData.cidade || userData.spiritual?.cidade || '',
+            estado: userData.estado || userData.spiritual?.estado || '',
+            whatsapp: userData.whatsapp || userData.spiritual?.whatsapp || userData.telefone || '',
+          },
           terreiro_id: currentTerreiroId,
         })
         .select()
@@ -640,32 +760,54 @@ export const useStore = create<AppState>()((set, get) => ({
   updateUser: async (id, userData) => {
     set({ isLoading: true });
     try {
-      const updateData: any = {};
-      if (userData.nomeCompleto !== undefined) updateData.nome_completo = userData.nomeCompleto;
-      if (userData.nomeDeSanto !== undefined) updateData.nome_de_santo = userData.nomeDeSanto;
-      if (userData.dataNascimento !== undefined) updateData.data_nascimento = userData.dataNascimento;
-      if (userData.rg !== undefined) updateData.rg = userData.rg;
-      if (userData.endereco !== undefined) updateData.endereco = userData.endereco;
-      if (userData.telefone !== undefined) updateData.telefone = userData.telefone;
-      if (userData.email !== undefined) updateData.email = userData.email;
-      if (userData.profissao !== undefined) updateData.profissao = userData.profissao;
-      if (userData.nomePais !== undefined) updateData.nome_pais = userData.nomePais;
-      if (userData.photoUrl !== undefined) updateData.photo_url = userData.photoUrl;
-      if (userData.spiritual !== undefined) updateData.spiritual = userData.spiritual;
-      if (userData.cpf !== undefined) updateData.cpf = userData.cpf;
-      if (userData.password !== undefined) updateData.password = userData.password;
-      if (userData.role !== undefined) updateData.role = userData.role;
+      const { users, currentUser } = get();
+      const existingUser = users.find(u => u.id === id);
+      if (!existingUser) return;
 
-      await supabase.from('users').update(updateData).eq('id', id);
+      // Prepare data for database (mapping camelCase to snake_case and handling JSONB fields)
+      const dbUpdate: any = {};
+      if (userData.nomeCompleto !== undefined) dbUpdate.nome_completo = userData.nomeCompleto;
+      if (userData.nomeDeSanto !== undefined) dbUpdate.nome_de_santo = userData.nomeDeSanto;
+      if (userData.dataNascimento !== undefined) dbUpdate.data_nascimento = userData.dataNascimento;
+      if (userData.rg !== undefined) dbUpdate.rg = userData.rg;
+      if (userData.endereco !== undefined) dbUpdate.endereco = userData.endereco;
+      if (userData.telefone !== undefined) dbUpdate.telefone = userData.telefone;
+      if (userData.email !== undefined) dbUpdate.email = userData.email;
+      if (userData.profissao !== undefined) dbUpdate.profissao = userData.profissao;
+      if (userData.nomePais !== undefined) dbUpdate.nome_pais = userData.nomePais;
+      if (userData.photoUrl !== undefined) dbUpdate.photo_url = userData.photoUrl;
+      if (userData.cpf !== undefined) dbUpdate.cpf = userData.cpf;
+      if (userData.password !== undefined) dbUpdate.password = userData.password;
+      
+      // Handle the spiritual JSONB field (merging new fields that don't have their own columns)
+      if (userData.spiritual || userData.cep || userData.cidade || userData.estado || userData.whatsapp) {
+        dbUpdate.spiritual = {
+          ...(userData.spiritual || existingUser.spiritual),
+          cep: userData.cep ?? (userData.spiritual?.cep || existingUser.cep || ''),
+          cidade: userData.cidade ?? (userData.spiritual?.cidade || existingUser.cidade || ''),
+          estado: userData.estado ?? (userData.spiritual?.estado || existingUser.estado || ''),
+          whatsapp: userData.whatsapp ?? (userData.spiritual?.whatsapp || existingUser.whatsapp || ''),
+        };
+      }
+
+      await supabase.from('users').update(dbUpdate).eq('id', id);
+
+      // Update local state
+      const updatedUser = { ...existingUser, ...userData };
+      // Ensure local state has the flat fields updated if they were part of the update
+      if (dbUpdate.spiritual) {
+        updatedUser.cep = dbUpdate.spiritual.cep;
+        updatedUser.cidade = dbUpdate.spiritual.cidade;
+        updatedUser.estado = dbUpdate.spiritual.estado;
+        updatedUser.whatsapp = dbUpdate.spiritual.whatsapp;
+      }
 
       set({
-        users: get().users.map(u => u.id === id ? { ...u, ...userData } : u),
+        users: users.map(u => u.id === id ? updatedUser : u),
       });
 
-      // Update currentUser if editing self
-      const { currentUser } = get();
       if (currentUser && currentUser.id === id) {
-        set({ currentUser: { ...currentUser, ...userData } });
+        set({ currentUser: updatedUser });
       }
     } finally {
       set({ isLoading: false });
@@ -675,11 +817,20 @@ export const useStore = create<AppState>()((set, get) => ({
   deleteUser: async (id) => {
     set({ isLoading: true });
     try {
-      await supabase.from('users').delete().eq('id', id);
+      console.log('Tentando excluir usuário:', id);
+      const { error } = await supabase.from('users').delete().eq('id', id);
+      if (error) {
+        console.error('Erro de deleção do Supabase (usuário):', error);
+        throw error;
+      }
+
       set({
         users: get().users.filter(u => u.id !== id),
         charges: get().charges.filter(c => !c.assignedTo.includes(id)),
       });
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      throw err;
     } finally {
       set({ isLoading: false });
     }
@@ -873,10 +1024,18 @@ export const useStore = create<AppState>()((set, get) => ({
   deleteBankAccount: async (id) => {
     set({ isLoading: true });
     try {
-      await supabase.from('bank_accounts').delete().eq('id', id);
+      console.log('Tentando excluir conta bancária:', id);
+      const { error } = await supabase.from('bank_accounts').delete().eq('id', id);
+      if (error) {
+        console.error('Erro de deleção do Supabase (banco):', error);
+        throw error;
+      }
       set({
         bankAccounts: get().bankAccounts.filter(b => b.id !== id),
       });
+    } catch (err) {
+      console.error('Error deleting bank account:', err);
+      throw err;
     } finally {
       set({ isLoading: false });
     }
