@@ -8,9 +8,11 @@ import { compressImage } from '../utils/image';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 export default function Terreiros() {
-  const { currentUser, getUserTerreiros, switchTerreiro, currentTerreiroId, addTerreiro, updateTerreiro, deleteTerreiro, toggleBlockTerreiro } = useStore();
+  const { currentUser, getUserTerreiros, switchTerreiro, currentTerreiroId, addTerreiro, updateTerreiro, deleteTerreiro, toggleBlockTerreiro, users } = useStore();
   const role = currentUser?.role?.toUpperCase();
   const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
+  const isTrueMaster = !!currentUser?.isMaster;
+  const trueMaster = users.find(u => u.isMaster);
   const isAdmin = role === 'ADMIN' || isMaster;
   const isStaff = isAdmin || role === 'FINANCEIRO' || role === 'SECRETARIA';
   const terreiros = getUserTerreiros();
@@ -211,16 +213,22 @@ export default function Terreiros() {
                         </button>
                       )}
 
-                      {isMaster && (
-                        <button 
-                          onClick={() => setDeleteModal({ isOpen: true, id: t.id, name: t.name })}
-                          className="icon-btn" 
-                          style={{ background: 'transparent', color: '#ff4c4c' }}
-                          title="Excluir Terreiro"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
+                      {(() => {
+                        const isThisMasterTerreiro = t.adminId === trueMaster?.id || t.id === trueMaster?.terreiroId;
+                        const canDelete = isTrueMaster || (isMaster && !isThisMasterTerreiro);
+                        if (!canDelete) return null;
+                        
+                        return (
+                          <button 
+                            onClick={() => setDeleteModal({ isOpen: true, id: t.id, name: t.name })}
+                            className="icon-btn" 
+                            style={{ background: 'transparent', color: '#ff4c4c' }}
+                            title="Excluir Terreiro"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        );
+                      })()}
                     </div>
                   </td>
                 </tr>

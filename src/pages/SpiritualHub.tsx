@@ -67,7 +67,7 @@ function searchLocalPontos(query: string): SearchResult[] {
   const normalizedQuery = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const terms = normalizedQuery.split(/\s+/).filter(t => t.length >= 2);
   
-  if (terms.length === 0) return [];
+  if (terms.length === 0) return PONTOS_DATABASE.slice(0, 8);
 
   const scored = PONTOS_DATABASE.map(item => {
     const titleNorm = item.title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -75,26 +75,29 @@ function searchLocalPontos(query: string): SearchResult[] {
     const artistNorm = (item.artist || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const typeNorm = (item.type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     
-    const allWords = [
-      ...titleNorm.split(/\s+/),
-      ...tagsNorm.split(/\s+/),
-      ...artistNorm.split(/\s+/),
-      ...typeNorm.split(/\s+/)
-    ];
-
+    const searchSpace = `${titleNorm} ${tagsNorm} ${artistNorm} ${typeNorm}`;
+    
     let score = 0;
     for (const t of terms) {
-      // Check if any word in the item EXACTLY matches the term
-      if (allWords.some(word => word === t)) {
+      if (searchSpace.includes(t)) {
         score += 10;
-      } else if (allWords.some(word => word.startsWith(t))) {
-        // Bonus for word starting with the term
-        score += 5;
+        
+        // Bonus points for exact matches or title matches
+        if (titleNorm.includes(t)) score += 5;
+        if (tagsNorm.includes(t)) score += 2;
+        
+        // Remove trailing "s" for plural handling
+        const singular = t.endsWith('s') ? t.slice(0, -1) : t;
+        if (singular !== t && searchSpace.includes(singular)) {
+            score += 5;
+        }
+      } else {
+        // Fallback for plurals: if user typed "caboclos" and searchSpace has "caboclo"
+        const singular = t.endsWith('s') ? t.slice(0, -1) : t;
+        if (singular !== t && searchSpace.includes(singular)) {
+            score += 8;
+        }
       }
-
-      // Bonus for terms in critical fields
-      if (titleNorm.includes(t)) score += 2;
-      if (tagsNorm.includes(t)) score += 1;
     }
     return { item, score };
   }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
@@ -112,8 +115,9 @@ export default function SpiritualHub() {
   const fetchYouTubeResults = async (query: string): Promise<SearchResult[]> => {
     try {
       const queryTerm = encodeURIComponent('ponto de umbanda ' + (query || ''));
-      // Usa corsproxy.io como proxy CORS confiável
-      const url = `https://corsproxy.io/?url=${encodeURIComponent('https://www.youtube.com/results?search_query=' + queryTerm)}`;
+      // Proxy CORS alternativo para lidar com respostas grandes do YouTube
+      const targetUrl = 'https://www.youtube.com/results?search_query=' + queryTerm;
+      const url = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error('Network response was not ok');
       const html = await res.text();
