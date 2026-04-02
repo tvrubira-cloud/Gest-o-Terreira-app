@@ -9,13 +9,16 @@ import { generatePixPayload } from '../utils/pix';
 export default function Financial() {
   const { currentUser, getFilteredCharges, getMyCharges, getFilteredUsers, addCharge, markChargeAsPaid, notifyPayment, terreiros, getSystemChargesForCurrentTerreiro, getSystemChargesIssuedByMaster, getCurrentTerreiro, masterPixKey, getBankAccountsForCurrentTerreiro, addBankAccount, deleteBankAccount, bankAccounts: _storeBankAccounts } = useStore();
   const currentTerreiro = getCurrentTerreiro();
-  const isAdmin = currentUser?.role === 'ADMIN';
-  const isMaster = currentUser?.isMaster || currentUser?.isPanelAdmin;
+  const role = currentUser?.role?.toUpperCase();
+  const isAdmin = role === 'ADMIN';
+  const isFinanceiro = role === 'FINANCEIRO';
+  const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
+  const canManageFinancial = isAdmin || isFinanceiro || isMaster;
   
   const [activeTab, setActiveTab] = useState<'HOUSE' | 'SYSTEM' | 'BANKS'>('HOUSE');
   const [view, setView] = useState<'LIST' | 'FORM' | 'FORM_BANK'>('LIST');
 
-  const houseCharges = isAdmin ? getFilteredCharges() : getMyCharges();
+  const houseCharges = canManageFinancial ? getFilteredCharges() : getMyCharges();
   const systemInvoices = isMaster ? getSystemChargesIssuedByMaster() : getSystemChargesForCurrentTerreiro();
   
   const charges = activeTab === 'HOUSE' ? houseCharges : systemInvoices;
@@ -100,7 +103,7 @@ export default function Financial() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 className="text-gradient" style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-            <DollarSign size={28} /> {isMaster && activeTab === 'SYSTEM' ? 'Mensalidades do Sistema (SaaS)' : (isAdmin ? 'Gestão Financeira da Casa' : 'Meus Compromissos')}
+            <DollarSign size={28} /> {isMaster && activeTab === 'SYSTEM' ? 'Mensalidades do Sistema (SaaS)' : (canManageFinancial ? 'Gestão Financeira da Casa' : 'Meus Compromissos')}
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.3rem' }}>
             {activeTab === 'SYSTEM' ? 'Gestão de faturamento dos terreiros cadastrados.' : 'Acompanhamento de mensalidades, eventos e colaborações.'}
@@ -108,7 +111,7 @@ export default function Financial() {
         </div>
         
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          {isAdmin && view === 'LIST' && (
+          {canManageFinancial && view === 'LIST' && (
             <div className="glass-panel" style={{ display: 'flex', padding: '0.3rem', borderRadius: 12, background: 'var(--hover-bg)' }}>
               <button 
                 onClick={() => setActiveTab('HOUSE')}
@@ -130,7 +133,7 @@ export default function Financial() {
             </div>
           )}
 
-          {isAdmin && view === 'LIST' && (
+          {canManageFinancial && view === 'LIST' && (
             <button 
               onClick={() => {
                 if (activeTab === 'BANKS') {
@@ -159,7 +162,7 @@ export default function Financial() {
       </div>
 
       {/* SaaS Alert for normal Admins */}
-      {isAdmin && !isMaster && getSystemChargesForCurrentTerreiro().length > 0 && (
+      {canManageFinancial && !isMaster && getSystemChargesForCurrentTerreiro().length > 0 && (
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -184,7 +187,7 @@ export default function Financial() {
       {view === 'LIST' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* Dashboard Stats */}
-          {isAdmin && activeTab !== 'BANKS' && (
+          {canManageFinancial && activeTab !== 'BANKS' && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                <div className="panel glass-panel" style={{ padding: '1.5rem', borderRadius: 'var(--panel-radius)', borderLeft: `3px solid ${activeTab === 'SYSTEM' ? 'var(--neon-purple)' : 'var(--neon-cyan)'}` }}>
                  <h4 style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>{activeTab === 'SYSTEM' ? 'SaaS Previsto' : 'Receita Prevista'}</h4>
@@ -210,7 +213,7 @@ export default function Financial() {
           {/* List Content */}
           <div className="panel glass-panel" style={{ padding: '1.5rem', borderRadius: 'var(--panel-radius)' }}>
             <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              {activeTab === 'BANKS' ? <><Landmark size={20} /> Contas Bancárias</> : (isAdmin ? 'Histórico de Cobranças' : 'Minhas Mensalidades e Eventos')}
+              {activeTab === 'BANKS' ? <><Landmark size={20} /> Contas Bancárias</> : (canManageFinancial ? 'Histórico de Cobranças' : 'Minhas Mensalidades e Eventos')}
             </h3>
             
             {activeTab === 'BANKS' ? (
@@ -220,7 +223,7 @@ export default function Financial() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
                   {bankAccounts.map(bank => (
                     <div key={bank.id} className="glass-panel" style={{ padding: '1.5rem', borderRadius: 12, borderTop: '3px solid #e2b714', position: 'relative' }}>
-                      {isAdmin && (
+                      {canManageFinancial && (
                         <button 
                           onClick={() => { if(confirm('Excluir conta bancária?')) deleteBankAccount(bank.id); }}
                           style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'transparent', border: 'none', color: '#ff4c4c', cursor: 'pointer' }}
@@ -311,7 +314,7 @@ export default function Financial() {
                               Notificar Pagamento
                             </button>
                           )}
-                          {isAdmin ? (
+                          {canManageFinancial ? (
                             <div style={{ textAlign: 'right' }}>
                               <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Status Adesão</div>
                               <div style={{ fontWeight: 'bold', color: charge.paidBy.length === charge.assignedTo.length ? '#00ff88' : 'var(--text-main)' }}>
@@ -335,7 +338,7 @@ export default function Financial() {
                       {/* Expandable details */}
                       {isExpanded && (
                         <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.3)', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                          {isAdmin ? (
+                          {canManageFinancial ? (
                             <>
                               <h4 style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.8rem', textTransform: 'uppercase' }}>{activeTab === 'SYSTEM' ? 'Terreiros Faturados' : 'Controle de Membros'} ({charge.assignedTo.length})</h4>
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
@@ -394,7 +397,7 @@ export default function Financial() {
         </div>
       )}
 
-      {view === 'FORM' && isAdmin && (
+      {view === 'FORM' && canManageFinancial && (
         <form onSubmit={handleSave} className="panel glass-panel" style={{ padding: '2rem', borderRadius: 'var(--panel-radius)', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           <div>
             <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.8rem', marginBottom: '1.5rem', color: 'var(--neon-cyan)' }}>Dados da Mensalidade / Evento</h3>
@@ -467,7 +470,7 @@ export default function Financial() {
         </form>
       )}
 
-      {view === 'FORM_BANK' && isAdmin && (
+      {view === 'FORM_BANK' && canManageFinancial && (
         <form onSubmit={handleSaveBank} className="panel glass-panel" style={{ padding: '2rem', borderRadius: 'var(--panel-radius)', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           <div>
             <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.8rem', marginBottom: '1.5rem', color: '#e2b714', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

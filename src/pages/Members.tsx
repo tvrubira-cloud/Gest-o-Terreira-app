@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore, defaultSpiritualData } from '../store/useStore';
 import type { User, SpiritualData } from '../store/useStore';
 import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2 } from 'lucide-react';
@@ -8,7 +8,10 @@ import ConfirmationModal from '../components/ConfirmationModal';
 
 export default function Members() {
   const { currentUser, addUser, updateUser, deleteUser, getFilteredUsers, getCurrentTerreiro } = useStore();
-  const isAdmin = currentUser?.role === 'ADMIN';
+  const role = currentUser?.role?.toUpperCase();
+  const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
+  const isAdmin = role === 'ADMIN' || isMaster;
+  const isStaff = isAdmin || role === 'FINANCEIRO' || role === 'SECRETARIA';
   const users = getFilteredUsers();
   const currentTerreiro = getCurrentTerreiro();
 
@@ -16,17 +19,41 @@ export default function Members() {
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchingCep, setIsSearchingCep] = useState(false);
-  const [activeTab, setActiveTab] = useState<'pessoal' | 'umbanda' | 'quimbanda' | 'nacao' | 'obrigacoes'>('pessoal');
+  const [activeTab, setActiveTab] = useState<'pessoal' | 'umbanda' | 'quimbanda' | 'nacao' | 'obrigacoes' | 'financeiro'>('pessoal');
+  const [isSaving, setIsSaving] = useState(false);
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; userId: string; userName: string }>({
     isOpen: false,
     userId: '',
     userName: ''
   });
 
-  if (!isAdmin && view === 'LIST') {
-    setView('FORM');
-    setEditingUser(currentUser);
-  }
+  const getAvailableTabs = () => {
+    const tabs: { id: 'pessoal' | 'umbanda' | 'quimbanda' | 'nacao' | 'obrigacoes' | 'financeiro'; label: string }[] = [
+      { id: 'pessoal', label: 'Dados Pessoais' }
+    ];
+    
+    // Verificamos se o usuário pode ver as abas espirituais (Apenas Staff)
+    if (isStaff) {
+      if (editingUser?.spiritual?.segmentoUmbanda) tabs.push({ id: 'umbanda', label: 'Umbanda' });
+      if (editingUser?.spiritual?.segmentoKimbanda) tabs.push({ id: 'quimbanda', label: 'Quimbanda' });
+      if (editingUser?.spiritual?.segmentoNacao) tabs.push({ id: 'nacao', label: 'Nação de Orixás' });
+      tabs.push({ id: 'obrigacoes', label: 'Calendário de Obrigações' });
+    }
+
+    // Apenas Admin e Financeiro veem a aba financeira do membro
+    if (isAdmin || role === 'FINANCEIRO') {
+      tabs.push({ id: 'financeiro', label: 'Financeiro' });
+    }
+
+    return tabs;
+  };
+
+  useEffect(() => {
+    if (!isStaff && view === 'LIST' && currentUser) {
+      setEditingUser(currentUser);
+      setView('FORM');
+    }
+  }, [isStaff, view, currentUser]);
 
   const handleOpenNew = () => {
     setEditingUser({
@@ -53,18 +80,26 @@ export default function Members() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser) return;
+    if (!editingUser || isSaving) return;
 
-    if (editingUser.id) {
-      await updateUser(editingUser.id, editingUser);
-    } else {
-      await addUser(editingUser as Omit<User, 'id' | 'createdAt' | 'terreiroId'>);
-    }
-    
-    if (isAdmin) {
-      setView('LIST');
-    } else {
-      alert("Dados salvos com sucesso.");
+    setIsSaving(true);
+    try {
+      if (editingUser.id) {
+        await updateUser(editingUser.id, editingUser);
+      } else {
+        await addUser(editingUser as Omit<User, 'id' | 'createdAt' | 'terreiroId'>);
+      }
+      
+      alert("Dados salvos com sucesso!");
+      
+      if (isAdmin) {
+        setView('LIST');
+      }
+    } catch (err: any) {
+      console.error('Erro ao salvar:', err);
+      alert(`Erro ao salvar os dados: ${err.message || 'Verifique sua conexão e tente novamente.'}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -100,13 +135,19 @@ export default function Members() {
 
   const updateSpiritual = (field: keyof SpiritualData, value: any) => {
     if (!editingUser) return;
-    setEditingUser({
-      ...editingUser,
+    
+    // Auto-correction for tabs: if a segment is unchecked, move to personal data if we are in that tab
+    if (field === 'segmentoUmbanda' && !value && activeTab === 'umbanda') setActiveTab('pessoal');
+    if (field === 'segmentoKimbanda' && !value && activeTab === 'quimbanda') setActiveTab('pessoal');
+    if (field === 'segmentoNacao' && !value && activeTab === 'nacao') setActiveTab('pessoal');
+
+    setEditingUser(prev => prev ? ({
+      ...prev,
       spiritual: {
-        ...(editingUser.spiritual as SpiritualData),
+        ...(prev.spiritual as SpiritualData),
         [field]: value
       }
-    });
+    }) : null);
   };
 
   const updateObrigacao = (index: number, field: 'data' | 'descricao', value: string) => {
@@ -126,16 +167,16 @@ export default function Members() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 className="text-gradient" style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-            <Users size={28} /> {isAdmin ? 'Membros da Casa' : 'Meu Perfil Espiritual'}
+            <Users size={28} /> {isStaff ? 'Membros da Casa' : 'Meu Perfil Espiritual'}
           </h2>
-          {isAdmin && currentTerreiro && (
+          {isStaff && currentTerreiro && (
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.3rem' }}>
               {currentTerreiro.name} — {users.length} membro{users.length !== 1 ? 's' : ''}
             </p>
           )}
         </div>
         
-        {isAdmin && view === 'LIST' && (
+        {isStaff && view === 'LIST' && (
           <button 
             onClick={handleOpenNew}
             className="glass-panel glow-fx"
@@ -144,7 +185,7 @@ export default function Members() {
             <Plus size={18} /> Cadastrar Membro
           </button>
         )}
-        {isAdmin && view === 'FORM' && (
+        {isStaff && view === 'FORM' && (
           <button 
             onClick={() => setView('LIST')}
             className="glass-panel glow-fx"
@@ -155,7 +196,7 @@ export default function Members() {
         )}
       </div>
 
-      {view === 'LIST' && isAdmin && (
+      {view === 'LIST' && isStaff && (
         <div className="panel glass-panel" style={{ padding: '1.5rem', borderRadius: 'var(--panel-radius)' }}>
           <div className="search-bar" style={{ width: '100%', marginBottom: '1.5rem' }}>
             <Search size={18} className="search-icon" />
@@ -176,6 +217,7 @@ export default function Members() {
                   <th style={{ padding: '1.2rem' }}>CPF / Login</th>
                   <th style={{ padding: '1.2rem' }}>Nome Completo</th>
                   <th style={{ padding: '1.2rem' }}>Nome de Santo</th>
+                  <th style={{ padding: '1.2rem' }}>Cargo</th>
                   <th style={{ padding: '1.2rem' }}>Status</th>
                   <th style={{ padding: '1.2rem' }}>Ações</th>
                 </tr>
@@ -197,6 +239,16 @@ export default function Members() {
                     <td style={{ padding: '1rem', color: 'var(--neon-cyan)', fontWeight: 500 }}>{u.nomeDeSanto || '-'}</td>
                     <td style={{ padding: '1rem' }}>
                       <span style={{ 
+                        fontSize: '0.75rem', fontWeight: 600, padding: '0.2rem 0.5rem', borderRadius: 6,
+                        background: u.isMaster || u.isPanelAdmin ? 'rgba(0, 240, 255, 0.1)' : 'rgba(255,255,255,0.05)',
+                        color: u.isMaster || u.isPanelAdmin ? 'var(--neon-cyan)' : 'var(--text-muted)',
+                        border: u.isMaster || u.isPanelAdmin ? '1px solid var(--neon-cyan)' : '1px solid var(--glass-border)'
+                      }}>
+                        {u.isMaster || u.isPanelAdmin ? 'MASTER' : (u.role === 'ADMIN' ? 'ADM' : (u.role === 'FINANCEIRO' ? 'FINAN' : (u.role === 'SECRETARIA' ? 'SEC' : 'MBR')))}
+                      </span>
+                    </td>
+                    <td style={{ padding: '1rem' }}>
+                      <span style={{ 
                         padding: '0.3rem 0.8rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 900, textTransform: 'uppercase',
                         background: u.spiritual?.situacaoCadastro === 'ativo' ? 'rgba(0, 255, 128, 0.1)' : 'rgba(255, 76, 76, 0.1)',
                         color: u.spiritual?.situacaoCadastro === 'ativo' ? '#00eeff' : '#ff4c4c',
@@ -215,7 +267,7 @@ export default function Members() {
                         >
                           <Edit2 size={16} color="var(--neon-cyan)" />
                         </button>
-                        {u.id !== currentUser?.id && !u.isMaster && (
+                        {isStaff && u.id !== currentUser?.id && !u.isMaster && (
                           <button 
                             onClick={() => setDeleteModal({ isOpen: true, userId: u.id, userName: u.nomeCompleto })}
                             className="icon-btn" 
@@ -239,11 +291,14 @@ export default function Members() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {/* Tabs Navigation */}
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <TabButton active={activeTab === 'pessoal'} onClick={() => setActiveTab('pessoal')} label="Dados Pessoais" />
-            <TabButton active={activeTab === 'umbanda'} onClick={() => setActiveTab('umbanda')} label="Umbanda" />
-            <TabButton active={activeTab === 'quimbanda'} onClick={() => setActiveTab('quimbanda')} label="Quimbanda" />
-            <TabButton active={activeTab === 'nacao'} onClick={() => setActiveTab('nacao')} label="Nação de Orixás" />
-            <TabButton active={activeTab === 'obrigacoes'} onClick={() => setActiveTab('obrigacoes')} label="Calendário de Obrigações" />
+            {getAvailableTabs().map(tab => (
+              <TabButton 
+                key={tab.id}
+                active={activeTab === tab.id} 
+                onClick={() => setActiveTab(tab.id)} 
+                label={tab.label} 
+              />
+            ))}
           </div>
 
           <form onSubmit={handleSave} className="panel glass-panel" style={{ padding: '2rem', borderRadius: 'var(--panel-radius)', position: 'relative' }}>
@@ -287,25 +342,46 @@ export default function Members() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                       <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Situação do Cadastro</label>
                       <div style={{ display: 'flex', gap: '1rem' }}>
-                        <StatusChip active={editingUser.spiritual?.situacaoCadastro === 'ativo'} onClick={() => updateSpiritual('situacaoCadastro', 'ativo')} label="Ativo" color="#00ff80" />
-                        <StatusChip active={editingUser.spiritual?.situacaoCadastro === 'inativo'} onClick={() => updateSpiritual('situacaoCadastro', 'inativo')} label="Inativo" color="#ff4c4c" />
+                        <StatusChip active={editingUser.spiritual?.situacaoCadastro === 'ativo'} onClick={() => updateSpiritual('situacaoCadastro', 'ativo')} label="Ativo" color="#00ff80" disabled={!isStaff} />
+                        <StatusChip active={editingUser.spiritual?.situacaoCadastro === 'inativo'} onClick={() => updateSpiritual('situacaoCadastro', 'inativo')} label="Inativo" color="#ff4c4c" disabled={!isStaff} />
                       </div>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                      <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Segmentos</label>
+                      <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Cargo / Permissão</label>
                       <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
-                        <SegmentCheck active={!!editingUser.spiritual?.segmentoUmbanda} onClick={() => updateSpiritual('segmentoUmbanda', !editingUser.spiritual?.segmentoUmbanda)} label="Umbanda" />
-                        <SegmentCheck active={!!editingUser.spiritual?.segmentoKimbanda} onClick={() => updateSpiritual('segmentoKimbanda', !editingUser.spiritual?.segmentoKimbanda)} label="Quimbanda" />
-                        <SegmentCheck active={!!editingUser.spiritual?.segmentoNacao} onClick={() => updateSpiritual('segmentoNacao', !editingUser.spiritual?.segmentoNacao)} label="Nação" />
+                        <StatusChip active={editingUser.role === 'ADMIN'} onClick={() => setEditingUser(prev => prev ? ({...prev, role: 'ADMIN'}) : null)} label="Administrador" color="var(--neon-cyan)" disabled={!isAdmin} />
+                        <StatusChip active={editingUser.role === 'FINANCEIRO'} onClick={() => setEditingUser(prev => prev ? ({...prev, role: 'FINANCEIRO'}) : null)} label="Financeiro" color="var(--accent-gold)" disabled={!isAdmin} />
+                        <StatusChip active={editingUser.role === 'SECRETARIA'} onClick={() => setEditingUser(prev => prev ? ({...prev, role: 'SECRETARIA'}) : null)} label="Secretaria" color="var(--neon-purple)" disabled={!isAdmin} />
+                        <StatusChip active={editingUser.role === 'USER'} onClick={() => setEditingUser(prev => prev ? ({...prev, role: 'USER'}) : null)} label="Membro" color="var(--text-muted)" disabled={!isAdmin} />
                       </div>
                     </div>
 
-                    <Input label="CPF (Login)" value={editingUser.cpf} onChange={(v) => setEditingUser({...editingUser, cpf: v})} required readOnly={!isAdmin && !!editingUser.id} />
-                    <Input label="Nome Completo" value={editingUser.nomeCompleto} onChange={(v) => setEditingUser({...editingUser, nomeCompleto: v})} required />
-                    <Input label="Data de Nascimento" type="date" value={editingUser.dataNascimento} onChange={(v) => setEditingUser({...editingUser, dataNascimento: v})} />
-                    <Input label="E-mail" type="email" value={editingUser.email} onChange={(v) => setEditingUser({...editingUser, email: v})} />
-                    <Input label="WhatsApp / Telefone" value={editingUser.telefone} onChange={(v) => setEditingUser({...editingUser, telefone: v})} />
+                    {currentUser?.isMaster && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                        <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Acesso Master</label>
+                        <SegmentCheck 
+                          active={!!editingUser.isPanelAdmin} 
+                          onClick={() => setEditingUser(prev => prev ? ({...prev, isPanelAdmin: !prev.isPanelAdmin}) : null)} 
+                          label="Administrador do Painel Master" 
+                        />
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                      <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Segmentos</label>
+                      <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
+                        <SegmentCheck active={!!editingUser.spiritual?.segmentoUmbanda} onClick={() => updateSpiritual('segmentoUmbanda', !editingUser.spiritual?.segmentoUmbanda)} label="Umbanda" disabled={!isStaff} />
+                        <SegmentCheck active={!!editingUser.spiritual?.segmentoKimbanda} onClick={() => updateSpiritual('segmentoKimbanda', !editingUser.spiritual?.segmentoKimbanda)} label="Quimbanda" disabled={!isStaff} />
+                        <SegmentCheck active={!!editingUser.spiritual?.segmentoNacao} onClick={() => updateSpiritual('segmentoNacao', !editingUser.spiritual?.segmentoNacao)} label="Nação" disabled={!isStaff} />
+                      </div>
+                    </div>
+
+                    <Input label="CPF (Login)" value={editingUser.cpf} onChange={(v) => setEditingUser(prev => prev ? ({...prev, cpf: v}) : null)} required readOnly={!isStaff && !!editingUser.id} />
+                    <Input label="Nome Completo" value={editingUser.nomeCompleto} onChange={(v) => setEditingUser(prev => prev ? ({...prev, nomeCompleto: v}) : null)} required />
+                    <Input label="Data de Nascimento" type="date" value={editingUser.dataNascimento} onChange={(v) => setEditingUser(prev => prev ? ({...prev, dataNascimento: v}) : null)} />
+                    <Input label="E-mail" type="email" value={editingUser.email} onChange={(v) => setEditingUser(prev => prev ? ({...prev, email: v}) : null)} />
+                    <Input label="WhatsApp / Telefone" value={editingUser.telefone} onChange={(v) => setEditingUser(prev => prev ? ({...prev, telefone: v}) : null)} />
                     
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', position: 'relative' }}>
                       <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>CEP</label>
@@ -340,20 +416,39 @@ export default function Members() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.5rem', display: 'block' }}>Umbanda de Origem</label>
-                      <select 
-                        className="search-input glass-panel" 
-                        style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', width: '100%', color: 'var(--text-main)', background: 'var(--glass-bg)' }}
-                        value={editingUser.spiritual?.umbandaOrigem || ''}
-                        onChange={(e) => updateSpiritual('umbandaOrigem', e.target.value)}
-                      >
-                        <option value="" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Selecione...</option>
-                        <option value="Umbanda" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Umbanda</option>
-                        <option value="Umbanda Almas e Angola" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Umbanda Almas e Angola</option>
-                        <option value="Omoloco" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Omoloco</option>
-                        <option value="Umbanda Sagrada" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Umbanda Sagrada</option>
-                        <option value="Jurema" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Jurema</option>
-                        <option value="Outra (especifique nas observações)" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Outra</option>
-                      </select>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <select 
+                          className="search-input glass-panel" 
+                          style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', width: '100%', color: 'var(--text-main)', background: 'var(--glass-bg)' }}
+                          value={['', 'Umbanda', 'Umbanda Almas e Angola', 'Omoloco', 'Umbanda Sagrada', 'Jurema'].includes(editingUser.spiritual?.umbandaOrigem || '') ? (editingUser.spiritual?.umbandaOrigem || '') : 'Outra'}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === 'Outra') {
+                              updateSpiritual('umbandaOrigem', ' '); // Espaço para disparar o campo de texto
+                            } else {
+                              updateSpiritual('umbandaOrigem', val);
+                            }
+                          }}
+                        >
+                          <option value="" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Selecione...</option>
+                          <option value="Umbanda" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Umbanda</option>
+                          <option value="Umbanda Almas e Angola" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Umbanda Almas e Angola</option>
+                          <option value="Omoloco" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Omoloco</option>
+                          <option value="Umbanda Sagrada" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Umbanda Sagrada</option>
+                          <option value="Jurema" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Jurema</option>
+                          <option value="Outra" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Outra...</option>
+                        </select>
+                        
+                        {(!['', 'Umbanda', 'Umbanda Almas e Angola', 'Omoloco', 'Umbanda Sagrada', 'Jurema'].includes(editingUser.spiritual?.umbandaOrigem || '')) && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+                            <Input 
+                              label="Especifique sua Tradição de Umbanda" 
+                              value={editingUser.spiritual?.umbandaOrigem?.trim()} 
+                              onChange={(v) => updateSpiritual('umbandaOrigem', v)} 
+                            />
+                          </motion.div>
+                        )}
+                      </div>
                     </div>
                     <Input label="Obrigação de Cabeça" value={editingUser.spiritual?.umbandaObrigaCabeca} onChange={(v) => updateSpiritual('umbandaObrigaCabeca', v)} />
                     <Input label="Obrigação de Corpo" value={editingUser.spiritual?.umbandaObrigaCorpo} onChange={(v) => updateSpiritual('umbandaObrigaCorpo', v)} />
@@ -383,19 +478,38 @@ export default function Members() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.5rem', display: 'block' }}>Quimbanda de Origem</label>
-                      <select 
-                        className="search-input glass-panel" 
-                        style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', width: '100%', color: 'var(--text-main)', background: 'var(--glass-bg)' }}
-                        value={editingUser.spiritual?.quimbandaOrigem || ''}
-                        onChange={(e) => updateSpiritual('quimbandaOrigem', e.target.value)}
-                      >
-                        <option value="" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Selecione...</option>
-                        <option value="Ganga Nagô (Kaballah)" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Ganga Nagô (Kaballah)</option>
-                        <option value="Congo" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Congo</option>
-                        <option value="Luciferiana" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Luciferiana</option>
-                        <option value="Malei" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Malei</option>
-                        <option value="Outra (especifique nas observações)" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Outra</option>
-                      </select>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <select 
+                          className="search-input glass-panel" 
+                          style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', width: '100%', color: 'var(--text-main)', background: 'var(--glass-bg)' }}
+                          value={['', 'Ganga Nagô (Kaballah)', 'Congo', 'Luciferiana', 'Malei'].includes(editingUser.spiritual?.quimbandaOrigem || '') ? (editingUser.spiritual?.quimbandaOrigem || '') : 'Outra'}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === 'Outra') {
+                              updateSpiritual('quimbandaOrigem', ' ');
+                            } else {
+                              updateSpiritual('quimbandaOrigem', val);
+                            }
+                          }}
+                        >
+                          <option value="" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Selecione...</option>
+                          <option value="Ganga Nagô (Kaballah)" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Ganga Nagô (Kaballah)</option>
+                          <option value="Congo" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Congo</option>
+                          <option value="Luciferiana" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Luciferiana</option>
+                          <option value="Malei" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Malei</option>
+                          <option value="Outra" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Outra...</option>
+                        </select>
+
+                        {(!['', 'Ganga Nagô (Kaballah)', 'Congo', 'Luciferiana', 'Malei'].includes(editingUser.spiritual?.quimbandaOrigem || '')) && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+                            <Input 
+                              label="Especifique sua Tradição de Quimbanda" 
+                              value={editingUser.spiritual?.quimbandaOrigem?.trim()} 
+                              onChange={(v) => updateSpiritual('quimbandaOrigem', v)} 
+                            />
+                          </motion.div>
+                        )}
+                      </div>
                     </div>
                     <Input label="Obrigação de Frente" value={editingUser.spiritual?.quimbandaObrigaFrente} onChange={(v) => updateSpiritual('quimbandaObrigaFrente', v)} />
                     <Input label="Companheiro(a)" value={editingUser.spiritual?.quimbandaObrigaCompanheiro} onChange={(v) => updateSpiritual('quimbandaObrigaCompanheiro', v)} />
@@ -417,22 +531,41 @@ export default function Members() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.5rem', display: 'block' }}>Nação de Origem</label>
-                      <select 
-                        className="search-input glass-panel" 
-                        style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', width: '100%', color: 'var(--text-main)', background: 'var(--glass-bg)' }}
-                        value={editingUser.spiritual?.nacaoOrigem || ''}
-                        onChange={(e) => updateSpiritual('nacaoOrigem', e.target.value)}
-                      >
-                        <option value="" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Selecione...</option>
-                        <option value="Candomblé" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Candomblé</option>
-                        <option value="Oyó e Jeje" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Oyó e Jeje</option>
-                        <option value="Cabinda" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Cabinda</option>
-                        <option value="Jeje e Ijexá" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Jeje e Ijexá</option>
-                        <option value="Oyó" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Oyó</option>
-                        <option value="Jeje" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Jeje</option>
-                        <option value="Nagô" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Nagô</option>
-                        <option value="Outra (especifique nas observações)" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Outra</option>
-                      </select>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <select 
+                          className="search-input glass-panel" 
+                          style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', width: '100%', color: 'var(--text-main)', background: 'var(--glass-bg)' }}
+                          value={['', 'Candomblé', 'Oyó e Jeje', 'Cabinda', 'Jeje e Ijexá', 'Oyó', 'Jeje', 'Nagô'].includes(editingUser.spiritual?.nacaoOrigem || '') ? (editingUser.spiritual?.nacaoOrigem || '') : 'Outra'}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === 'Outra') {
+                              updateSpiritual('nacaoOrigem', ' ');
+                            } else {
+                              updateSpiritual('nacaoOrigem', val);
+                            }
+                          }}
+                        >
+                          <option value="" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Selecione...</option>
+                          <option value="Candomblé" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Candomblé</option>
+                          <option value="Oyó e Jeje" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Oyó e Jeje</option>
+                          <option value="Cabinda" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Cabinda</option>
+                          <option value="Jeje e Ijexá" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Jeje e Ijexá</option>
+                          <option value="Oyó" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Oyó</option>
+                          <option value="Jeje" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Jeje</option>
+                          <option value="Nagô" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Nagô</option>
+                          <option value="Outra" style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>Outra...</option>
+                        </select>
+
+                        {(!['', 'Candomblé', 'Oyó e Jeje', 'Cabinda', 'Jeje e Ijexá', 'Oyó', 'Jeje', 'Nagô'].includes(editingUser.spiritual?.nacaoOrigem || '')) && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+                            <Input 
+                              label="Especifique sua Tradição de Nação" 
+                              value={editingUser.spiritual?.nacaoOrigem?.trim()} 
+                              onChange={(v) => updateSpiritual('nacaoOrigem', v)} 
+                            />
+                          </motion.div>
+                        )}
+                      </div>
                     </div>
                     <Input label="Obrigação de Cabeça" value={editingUser.spiritual?.nacaoObrigaCabeca} onChange={(v) => updateSpiritual('nacaoObrigaCabeca', v)} />
                     <Input label="Obrigação de Corpo" value={editingUser.spiritual?.nacaoObrigaCorpo} onChange={(v) => updateSpiritual('nacaoObrigaCorpo', v)} />
@@ -460,23 +593,61 @@ export default function Members() {
                   </div>
                 </motion.div>
               )}
+
+              {activeTab === 'financeiro' && (isAdmin || role === 'FINANCEIRO') && (
+                <motion.div key="financeiro" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                  <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.8rem', marginBottom: '1.5rem', color: '#00ff88' }}>Controle Financeiro Individual</h3>
+                  <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: 12, border: '1px solid rgba(0, 255, 136, 0.2)' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Aqui você pode visualizar o histórico de pagamentos e pendências deste membro.</p>
+                    <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: 8, textAlign: 'center' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Módulo de histórico detalhado em desenvolvimento ou vinculado ao Financeiro Global.</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </AnimatePresence>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--glass-border)' }}>
               <div style={{ display: 'flex', gap: '1rem' }}>
                 {activeTab !== 'pessoal' && <button type="button" onClick={() => {
-                  const tabs: any[] = ['pessoal', 'umbanda', 'quimbanda', 'nacao', 'obrigacoes'];
-                  setActiveTab(tabs[tabs.indexOf(activeTab) - 1]);
+                  const tabs = getAvailableTabs();
+                  const currentIndex = tabs.findIndex(t => t.id === activeTab);
+                  if (currentIndex > 0) setActiveTab(tabs[currentIndex - 1].id);
                 }} style={{ background: 'transparent', color: '#fff', border: '1px solid var(--glass-border)', padding: '0.8rem 1.5rem', borderRadius: 8, cursor: 'pointer' }}>Anterior</button>}
                 
                 {activeTab !== 'obrigacoes' && <button type="button" onClick={() => {
-                  const tabs: any[] = ['pessoal', 'umbanda', 'quimbanda', 'nacao', 'obrigacoes'];
-                  setActiveTab(tabs[tabs.indexOf(activeTab) + 1]);
+                  const tabs = getAvailableTabs();
+                  const currentIndex = tabs.findIndex(t => t.id === activeTab);
+                  if (currentIndex < tabs.length - 1) setActiveTab(tabs[currentIndex + 1].id);
                 }} style={{ background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid var(--neon-cyan)', padding: '0.8rem 1.5rem', borderRadius: 8, cursor: 'pointer' }}>Próximo</button>}
               </div>
 
-              <button type="submit" className="glass-panel glow-fx" style={{ padding: '0.8rem 2.5rem', background: 'linear-gradient(90deg, #00f0ff, #9D4EDD)', color: '#000', fontSize: '1rem', fontWeight: 900, border: 'none', borderRadius: 10, cursor: 'pointer', boxShadow: '0 0 20px rgba(0, 240, 255, 0.3)' }}>
-                SALVAR FICHA
+              <button 
+                type="submit" 
+                disabled={isSaving}
+                className="glass-panel glow-fx" 
+                style={{ 
+                  padding: '0.8rem 2.5rem', 
+                  background: isSaving ? 'rgba(255,255,255,0.1)' : 'linear-gradient(90deg, #00f0ff, #9D4EDD)', 
+                  color: isSaving ? 'var(--text-muted)' : '#000', 
+                  fontSize: '1rem', 
+                  fontWeight: 900, 
+                  border: 'none', 
+                  borderRadius: 10, 
+                  cursor: isSaving ? 'not-allowed' : 'pointer', 
+                  boxShadow: isSaving ? 'none' : '0 0 20px rgba(0, 240, 255, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 size={18} className="spin" /> SALVANDO...
+                  </>
+                ) : (
+                  'SALVAR FICHA'
+                )}
               </button>
             </div>
           </form>
@@ -519,24 +690,26 @@ function TabButton({ active, onClick, label }: { active: boolean, onClick: () =>
   );
 }
 
-function StatusChip({ active, onClick, label, color }: { active: boolean, onClick: () => void, label: string, color: string }) {
+function StatusChip({ active, onClick, label, color, disabled = false }: { active: boolean, onClick: () => void, label: string, color: string, disabled?: boolean }) {
   return (
-    <button type="button" onClick={onClick} style={{ 
-      padding: '0.5rem 1.2rem', borderRadius: '20px', border: `1px solid ${active ? color : 'var(--glass-border)'}`, cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.2s',
+    <button type="button" onClick={onClick} disabled={disabled} style={{ 
+      padding: '0.5rem 1.2rem', borderRadius: '20px', border: `1px solid ${active ? color : 'var(--glass-border)'}`, cursor: disabled ? 'default' : 'pointer', fontSize: '0.85rem', transition: 'all 0.2s',
       background: active ? `${color}20` : 'transparent',
-      color: active ? color : 'var(--text-muted)'
+      color: active ? color : 'var(--text-muted)',
+      opacity: disabled ? 0.6 : 1
     }}>
       {label}
     </button>
   );
 }
 
-function SegmentCheck({ active, onClick, label }: { active: boolean, onClick: () => void, label: string }) {
+function SegmentCheck({ active, onClick, label, disabled = false }: { active: boolean, onClick: () => void, label: string, disabled?: boolean }) {
   return (
-    <button type="button" onClick={onClick} style={{ 
-      padding: '0.5rem 1rem', borderRadius: '8px', border: `1px solid ${active ? '#9D4EDD' : 'var(--glass-border)'}`, cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'all 0.2s',
+    <button type="button" onClick={onClick} disabled={disabled} style={{ 
+      padding: '0.5rem 1rem', borderRadius: '8px', border: `1px solid ${active ? '#9D4EDD' : 'var(--glass-border)'}`, cursor: disabled ? 'default' : 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'all 0.2s',
       background: active ? 'rgba(157, 78, 221, 0.15)' : 'transparent',
-      color: active ? '#b388ff' : 'var(--text-muted)'
+      color: active ? '#b388ff' : 'var(--text-muted)',
+      opacity: disabled ? 0.6 : 1
     }}>
       <div style={{ width: 14, height: 14, borderRadius: 3, border: '1px solid currentColor', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {active && <div style={{ width: 8, height: 8, background: 'currentColor', borderRadius: 1 }} />}

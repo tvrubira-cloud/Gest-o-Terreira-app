@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 
-export type Role = 'ADMIN' | 'USER';
+export type Role = 'ADMIN' | 'FINANCEIRO' | 'SECRETARIA' | 'USER';
 
 export interface SpiritualData {
   // Novos campos
@@ -50,6 +50,7 @@ export interface SpiritualData {
   orixaFrente?: string;
   tempoUmbanda?: string;
   tipoMedium?: string;
+  appRole?: Role;
 }
 
 export const defaultSpiritualData: SpiritualData = {
@@ -249,10 +250,10 @@ function dbToTerreiro(row: any): Terreiro {
   };
 }
 
-function dbToUser(row: any): User {
+export function dbToUser(row: any): User {
   return {
     id: row.id,
-    role: row.role as Role,
+    role: (row.spiritual?.appRole || row.role || 'USER').toUpperCase() as Role,
     isMaster: row.is_master || false,
     isPanelAdmin: row.is_panel_admin || false,
     cpf: row.cpf,
@@ -337,14 +338,28 @@ export const useStore = create<AppState>()((set, get) => ({
   initializeData: async () => {
     if (get().initialized) return;
     set({ isLoading: true });
+    console.log('🔄 Iniciando carga de dados do Supabase...');
+    
     try {
-      const [terreiroRes, userRes, eventRes, chargeRes, bankRes] = await Promise.all([
+      // Timeout de 15 segundos para evitar travamento infinito
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout ao carregar dados do Supabase')), 15000)
+      );
+
+      const fetchPromise = Promise.all([
         supabase.from('terreiros').select('*'),
         supabase.from('users').select('*'),
         supabase.from('events').select('*'),
         supabase.from('charges').select('*'),
         supabase.from('bank_accounts').select('*'),
       ]);
+
+      const [terreiroRes, userRes, eventRes, chargeRes, bankRes] = await Promise.race([
+        fetchPromise,
+        timeoutPromise
+      ]) as any[];
+
+      console.log('✅ Dados carregados com sucesso');
 
       set({
         terreiros: (terreiroRes.data || []).map(dbToTerreiro),
@@ -354,8 +369,11 @@ export const useStore = create<AppState>()((set, get) => ({
         bankAccounts: (bankRes.data || []).map(dbToBankAccount),
         initialized: true,
       });
-    } catch (err) {
-      console.error('Erro ao carregar dados do Supabase:', err);
+    } catch (err: any) {
+      console.error('❌ Erro ao carregar dados do Supabase:', err.message);
+      // Mesmo com erro, marcamos como inicializado para não travar o App.tsx se o erro for persistente
+      // mas mantemos os arrays vazios.
+      set({ initialized: true });
     } finally {
       set({ isLoading: false });
     }
@@ -719,10 +737,20 @@ export const useStore = create<AppState>()((set, get) => ({
       const { currentTerreiroId } = get();
       if (!currentTerreiroId) return;
 
+      const dbRole = (userData.role === 'FINANCEIRO' || userData.role === 'SECRETARIA') ? 'USER' : userData.role;
+      const spiritualWithRole = {
+        ...userData.spiritual,
+        appRole: userData.role,
+        cep: userData.cep || userData.spiritual?.cep || '',
+        cidade: userData.cidade || userData.spiritual?.cidade || '',
+        estado: userData.estado || userData.spiritual?.estado || '',
+        whatsapp: userData.whatsapp || userData.spiritual?.whatsapp || userData.telefone || '',
+      };
+
       const { data, error } = await supabase
         .from('users')
         .insert({
-          role: userData.role,
+          role: (dbRole || 'USER').toUpperCase(),
           is_master: userData.isMaster || false,
           is_panel_admin: userData.isPanelAdmin || false,
           cpf: userData.cpf,
@@ -737,13 +765,7 @@ export const useStore = create<AppState>()((set, get) => ({
           profissao: userData.profissao || '',
           nome_pais: userData.nomePais || '',
           photo_url: userData.photoUrl || '',
-          spiritual: {
-            ...userData.spiritual,
-            cep: userData.cep || userData.spiritual?.cep || '',
-            cidade: userData.cidade || userData.spiritual?.cidade || '',
-            estado: userData.estado || userData.spiritual?.estado || '',
-            whatsapp: userData.whatsapp || userData.spiritual?.whatsapp || userData.telefone || '',
-          },
+          spiritual: spiritualWithRole,
           terreiro_id: currentTerreiroId,
         })
         .select()
@@ -751,7 +773,13 @@ export const useStore = create<AppState>()((set, get) => ({
 
       if (!error && data) {
         set({ users: [...get().users, dbToUser(data)] });
+      } else if (error) {
+        console.error('❌ Erro ao adicionar usuário no Supabase:', error.message);
+        throw error;
       }
+    } catch (err: any) {
+      console.error('❌ Exceção ao adicionar usuário:', err.message);
+      throw err;
     } finally {
       set({ isLoading: false });
     }
@@ -764,33 +792,62 @@ export const useStore = create<AppState>()((set, get) => ({
       const existingUser = users.find(u => u.id === id);
       if (!existingUser) return;
 
-      // Prepare data for database (mapping camelCase to snake_case and handling JSONB fields)
-      const dbUpdate: any = {};
-      if (userData.nomeCompleto !== undefined) dbUpdate.nome_completo = userData.nomeCompleto;
-      if (userData.nomeDeSanto !== undefined) dbUpdate.nome_de_santo = userData.nomeDeSanto;
-      if (userData.dataNascimento !== undefined) dbUpdate.data_nascimento = userData.dataNascimento;
-      if (userData.rg !== undefined) dbUpdate.rg = userData.rg;
-      if (userData.endereco !== undefined) dbUpdate.endereco = userData.endereco;
-      if (userData.telefone !== undefined) dbUpdate.telefone = userData.telefone;
-      if (userData.email !== undefined) dbUpdate.email = userData.email;
-      if (userData.profissao !== undefined) dbUpdate.profissao = userData.profissao;
-      if (userData.nomePais !== undefined) dbUpdate.nome_pais = userData.nomePais;
-      if (userData.photoUrl !== undefined) dbUpdate.photo_url = userData.photoUrl;
-      if (userData.cpf !== undefined) dbUpdate.cpf = userData.cpf;
-      if (userData.password !== undefined) dbUpdate.password = userData.password;
+      console.log('📝 Chamando updateUser para ID:', id, 'com dados:', userData);
       
-      // Handle the spiritual JSONB field (merging new fields that don't have their own columns)
-      if (userData.spiritual || userData.cep || userData.cidade || userData.estado || userData.whatsapp) {
+      const dbUpdate: any = {};
+      // Mapping explicitly and filtered undefined to avoid overwriting with null/undefined accidentally
+      const dbRole = (userData.role === 'FINANCEIRO' || userData.role === 'SECRETARIA') ? 'USER' : userData.role;
+
+      const fields: Record<string, any> = {
+        nome_completo: userData.nomeCompleto,
+        nome_de_santo: userData.nomeDeSanto,
+        data_nascimento: userData.dataNascimento,
+        rg: userData.rg,
+        endereco: userData.endereco,
+        telefone: userData.telefone,
+        email: userData.email,
+        profissao: userData.profissao,
+        nome_pais: userData.nomePais,
+        photo_url: userData.photoUrl,
+        cpf: userData.cpf,
+        password: userData.password,
+        role: dbRole ? dbRole.toUpperCase() : undefined,
+        is_master: userData.isMaster,
+        is_panel_admin: userData.isPanelAdmin
+      };
+
+      Object.entries(fields).forEach(([key, value]) => {
+        if (value !== undefined) {
+          dbUpdate[key] = value;
+        }
+      });
+
+      console.log('🔧 Objeto de atualização construído (dbUpdate):', dbUpdate);
+      
+      // Handle the spiritual JSONB field
+      // We merge existing spiritual data with new userData.spiritual, or individual flat fields if provided
+      if (userData.role || userData.spiritual || userData.cep !== undefined || userData.cidade !== undefined || userData.estado !== undefined || userData.whatsapp !== undefined) {
+        const baseSpiritual = userData.spiritual || existingUser.spiritual || defaultSpiritualData;
+        
         dbUpdate.spiritual = {
-          ...(userData.spiritual || existingUser.spiritual),
-          cep: userData.cep ?? (userData.spiritual?.cep || existingUser.cep || ''),
-          cidade: userData.cidade ?? (userData.spiritual?.cidade || existingUser.cidade || ''),
-          estado: userData.estado ?? (userData.spiritual?.estado || existingUser.estado || ''),
-          whatsapp: userData.whatsapp ?? (userData.spiritual?.whatsapp || existingUser.whatsapp || ''),
+          ...baseSpiritual,
+          appRole: userData.role || baseSpiritual.appRole,
+          cep: userData.cep ?? (userData.spiritual?.cep || existingUser.cep || baseSpiritual.cep || ''),
+          cidade: userData.cidade ?? (userData.spiritual?.cidade || existingUser.cidade || baseSpiritual.cidade || ''),
+          estado: userData.estado ?? (userData.spiritual?.estado || existingUser.estado || baseSpiritual.estado || ''),
+          whatsapp: userData.whatsapp ?? (userData.spiritual?.whatsapp || existingUser.whatsapp || baseSpiritual.whatsapp || ''),
         };
       }
 
-      await supabase.from('users').update(dbUpdate).eq('id', id);
+      console.log('📡 Enviando update para o Supabase (dbUpdate):', dbUpdate);
+      const { error } = await supabase.from('users').update(dbUpdate).eq('id', id);
+
+      if (error) {
+        console.error('❌ Erro ao atualizar usuário no Supabase:', error.message);
+        throw new Error(`Erro ao atualizar no banco: ${error.message}`);
+      }
+
+      console.log('✅ Usuário atualizado com sucesso no Supabase');
 
       // Update local state
       const updatedUser = { ...existingUser, ...userData };

@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS terreiros (
 -- 2. Users
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY DEFAULT ('user-' || gen_random_uuid()::text),
-  role TEXT NOT NULL DEFAULT 'USER' CHECK (role IN ('ADMIN', 'USER')),
+  role TEXT NOT NULL DEFAULT 'USER' CHECK (role IN ('ADMIN', 'FINANCEIRO', 'SECRETARIA', 'USER')),
   is_master BOOLEAN DEFAULT false,
   is_panel_admin BOOLEAN DEFAULT false,
   cpf TEXT NOT NULL,

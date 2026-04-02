@@ -9,10 +9,17 @@ import ConfirmationModal from '../components/ConfirmationModal';
 
 export default function Terreiros() {
   const { currentUser, getUserTerreiros, switchTerreiro, currentTerreiroId, addTerreiro, updateTerreiro, deleteTerreiro, toggleBlockTerreiro } = useStore();
-  const isAdmin = currentUser?.role === 'ADMIN';
-  const isMaster = currentUser?.isMaster || currentUser?.isPanelAdmin;
+  const role = currentUser?.role?.toUpperCase();
+  const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
+  const isAdmin = role === 'ADMIN' || isMaster;
+  const isStaff = isAdmin || role === 'FINANCEIRO' || role === 'SECRETARIA';
   const terreiros = getUserTerreiros();
   const navigate = useNavigate();
+
+  // Redirect if not staff
+  useEffect(() => {
+    if (!isStaff) navigate('/dashboard');
+  }, [isStaff, navigate]);
 
   const [view, setView] = useState<'LIST' | 'FORM'>('LIST');
   const [editingTerreiro, setEditingTerreiro] = useState<Partial<Terreiro> | null>(null);

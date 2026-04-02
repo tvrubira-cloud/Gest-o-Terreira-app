@@ -10,7 +10,7 @@ import RegisterTerreiro from './pages/RegisterTerreiro';
 import Terreiros from './pages/Terreiros';
 import Financial from './pages/Financial';
 import SpiritualHub from './pages/SpiritualHub';
-import { useStore } from './store/useStore';
+import { useStore, dbToUser } from './store/useStore';
 import { supabase } from './lib/supabase';
 
 function App() {
@@ -32,40 +32,20 @@ function App() {
       if (session) {
         try {
           const { userId, terreiroId } = JSON.parse(session);
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('users')
             .select('*')
             .eq('id', userId)
             .limit(1);
 
-          if (data?.[0]) {
-            const row = data[0];
+          if (!error && data?.[0]) {
+            const user = dbToUser(data[0]);
             useStore.setState({
-              currentUser: {
-                id: row.id,
-                role: row.role,
-                isMaster: row.is_master || false,
-                isPanelAdmin: row.is_panel_admin || false,
-                cpf: row.cpf,
-                password: row.password,
-                palavraChave: row.palavra_chave,
-                nomeCompleto: row.nome_completo,
-                nomeDeSanto: row.nome_de_santo || '',
-                dataNascimento: row.data_nascimento || '',
-                rg: row.rg || '',
-                endereco: row.endereco || '',
-                telefone: row.telefone || '',
-                email: row.email || '',
-                profissao: row.profissao || '',
-                nomePais: row.nome_pais || '',
-                photoUrl: row.photo_url || '',
-                spiritual: row.spiritual || {},
-                createdAt: row.created_at,
-                terreiroId: row.terreiro_id,
-              },
-              currentTerreiroId: terreiroId || row.terreiro_id,
+              currentUser: user,
+              currentTerreiroId: terreiroId || user.terreiroId,
             });
           } else {
+            if (error) console.error('❌ Erro ao restaurar sessão:', error.message);
             localStorage.removeItem('terreiro-session');
           }
         } catch {
@@ -118,6 +98,16 @@ function App() {
           <Route path="hub-ia" element={<SpiritualHub />} />
         </Route>
       </Routes>
+      <svg width="0" height="0" style={{ position: 'absolute' }}>
+        <filter id="remove-black-bg" colorInterpolationFilters="sRGB">
+          <feColorMatrix type="matrix" values="
+            1 0 0 0 0
+            0 1 0 0 0
+            0 0 1 0 0
+            1 1 1 0 -0.1
+          " />
+        </filter>
+      </svg>
     </BrowserRouter>
   );
 }

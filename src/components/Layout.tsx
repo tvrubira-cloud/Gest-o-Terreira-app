@@ -4,6 +4,7 @@ import { LayoutDashboard, Users, Calendar, Settings, LogOut, Hexagon, Search, Be
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import bgImage from '../assets/bg.png';
+import logo from '../assets/logo.png';
 import '../App.css';
 
 export default function Layout() {
@@ -25,12 +26,15 @@ export default function Layout() {
 
   const currentTerreiro = getCurrentTerreiro();
   const userTerreiros = getUserTerreiros();
-  const isAdmin = currentUser.role === 'ADMIN';
+  const isMaster = !!currentUser.isMaster || !!currentUser.isPanelAdmin;
+  const role = currentUser.role?.toUpperCase();
+  const isAdmin = role === 'ADMIN' || isMaster;
+  const isStaff = isAdmin || role === 'FINANCEIRO' || role === 'SECRETARIA';
 
   const menuItems = [
     { id: 'dashboard', path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', adminOnly: false },
     { id: 'hub-ia', path: '/hub-ia', icon: Sparkles, label: 'Centro de IA', adminOnly: false },
-    { id: 'members', path: '/members', icon: Users, label: isAdmin ? 'Membros da Casa' : 'Meu Perfil', adminOnly: false },
+    { id: 'members', path: '/members', icon: Users, label: isStaff ? 'Membros da Casa' : 'Meu Perfil', adminOnly: false },
     { id: 'events', path: '/events', icon: Calendar, label: 'Agenda e Eventos', adminOnly: false },
     { id: 'financial', path: '/financeiro', icon: DollarSign, label: 'Financeiro', adminOnly: false },
     { id: 'terreiros', path: '/terreiros', icon: Building2, label: 'Minhas Casas', adminOnly: true },
@@ -78,11 +82,15 @@ export default function Layout() {
         {/* Sidebar */}
         <aside className={`sidebar glass-panel ${mobileMenuOpen ? 'sidebar-open' : ''}`}>
           <div className="logo-container">
-            {currentTerreiro?.logoUrl ? (
-               <img src={currentTerreiro.logoUrl} alt="Logo" style={{ width: 32, height: 32, borderRadius: 8 }} />
-            ) : (
-               <Hexagon size={32} className="logo-icon glow-icon" color="var(--neon-cyan)" />
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+              <img src={logo} alt="ORUM.app" style={{ width: 60, height: 60, objectFit: 'contain', filter: 'url(#remove-black-bg)' }} />
+              <div style={{ width: '1px', height: '32px', background: 'var(--glass-border)' }}></div>
+              {currentTerreiro?.logoUrl ? (
+                 <img src={currentTerreiro.logoUrl} alt="Logo" style={{ width: 40, height: 40, borderRadius: 8 }} />
+              ) : (
+                 <Hexagon size={32} className="logo-icon glow-icon" color="var(--neon-cyan)" />
+              )}
+            </div>
             <h1 className="logo-text text-gradient" style={{ fontSize: '1.1rem', lineHeight: '1.2', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
               <span>{currentTerreiro?.name || 'Terreiro'}</span>
             </h1>
@@ -168,16 +176,52 @@ export default function Layout() {
           )}
 
           <nav className="nav-menu" style={{ flex: 1 }}>
-            {menuItems.filter(item => !item.adminOnly || isAdmin).map((item) => (
-              <button
-                key={item.id}
-                className={`nav-item ${location.pathname.startsWith(item.path) ? 'active' : ''}`}
-                onClick={() => { navigate(item.path); setMobileMenuOpen(false); }}
-              >
-                <item.icon size={20} className="nav-icon" />
-                <span>{item.label}</span>
-              </button>
-            ))}
+            {menuItems.filter(item => {
+              // Now uses the outer 'role' and 'isMaster' variables defined at lines 29-30
+
+              // Master and Panel Admin see everything
+              if (isMaster) return true;
+
+              // Local Admin ('Administrador') sees everything
+              if (role === 'ADMIN') {
+                return true;
+              }
+
+              // Financeiro (Tudo menos Configurações)
+              if (role === 'FINANCEIRO') {
+                return ['dashboard', 'hub-ia', 'members', 'events', 'financial', 'terreiros'].includes(item.id);
+              }
+
+              // Secretaria (Dashboard, Membros, Agenda/Eventos, Minhas Casas)
+              if (role === 'SECRETARIA') {
+                return ['dashboard', 'members', 'events', 'terreiros'].includes(item.id);
+              }
+
+              // Membro (USER) - Sees Dashboard, AI Hub, Profile, Events, and Financial
+              if (role === 'USER') {
+                return ['dashboard', 'hub-ia', 'members', 'events', 'financial'].includes(item.id);
+              }
+
+              return false;
+            }).map((item) => {
+              // Now uses the outer 'role' and 'isMaster' and 'isStaff' variables defined at lines 29-32
+              
+              // Dynamic label for members page
+              const label = item.id === 'members' 
+                ? (isStaff ? 'Membros da Casa' : 'Meu Perfil') 
+                : item.label;
+
+              return (
+                <button
+                  key={item.id}
+                  className={`nav-item ${location.pathname.startsWith(item.path) ? 'active' : ''}`}
+                  onClick={() => { navigate(item.path); setMobileMenuOpen(false); }}
+                >
+                  <item.icon size={22} className="nav-icon" />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
           </nav>
 
           <button className="nav-item" onClick={() => { handleLogout(); setMobileMenuOpen(false); }} style={{ color: '#ff4c4c', marginTop: 'auto' }}>
@@ -206,9 +250,9 @@ export default function Layout() {
               </button>
               <div className="user-profile">
                 {currentUser.photoUrl ? (
-                  <img src={currentUser.photoUrl} alt="Avatar" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--neon-cyan)' }} />
+                  <img src={currentUser.photoUrl} alt="Avatar" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--neon-cyan)' }} />
                 ) : (
-                  <div className="avatar">{currentUser.nomeCompleto.charAt(0)}</div>
+                  <div className="avatar" style={{ width: 40, height: 40, fontSize: '1.2rem' }}>{currentUser.nomeCompleto.charAt(0)}</div>
                 )}
                 <span>{currentUser.nomeDeSanto || currentUser.nomeCompleto}</span>
               </div>

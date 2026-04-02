@@ -5,7 +5,8 @@ import { motion } from 'framer-motion';
 
 export default function Events() {
   const { addEvent, currentUser, getFilteredEvents, getCurrentTerreiro } = useStore();
-  const isAdmin = currentUser?.role === 'ADMIN';
+  const role = currentUser?.role?.toUpperCase();
+  const isAdmin = role === 'ADMIN' || currentUser?.isMaster || currentUser?.isPanelAdmin;
   const events = getFilteredEvents();
   const currentTerreiro = getCurrentTerreiro();
 

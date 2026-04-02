@@ -2,6 +2,7 @@ import { useStore } from '../store/useStore';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Users, Calendar, Sparkles, UserPlus, CalendarPlus, Settings as SettingsIcon, Building, ArrowRight } from 'lucide-react';
+import logo from '../assets/logo.png';
 
 export default function Dashboard() {
   const currentUser = useStore(state => state.currentUser);
@@ -14,8 +15,10 @@ export default function Dashboard() {
   const currentTerreiro = getCurrentTerreiro();
   const users = getFilteredUsers();
   const events = getFilteredEvents();
-  const isAdmin = currentUser.role === 'ADMIN';
-  const isMaster = currentUser.isMaster || currentUser.isPanelAdmin;
+  const isMaster = !!currentUser.isMaster || !!currentUser.isPanelAdmin;
+  const role = currentUser.role?.toUpperCase();
+  const isAdmin = role === 'ADMIN' || isMaster;
+  const isStaff = isAdmin || role === 'FINANCEIRO' || role === 'SECRETARIA';
   const navigate = useNavigate();
 
   const containerVariants = {
@@ -47,13 +50,16 @@ export default function Dashboard() {
       >
         <div className="banner-text">
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-            <Sparkles size={32} color="var(--neon-cyan)" className="glow-icon" />
+            <div style={{ position: 'relative' }}>
+              <img src={logo} alt="ORUM.app" style={{ width: 80, height: 80, borderRadius: 16, filter: 'url(#remove-black-bg) drop-shadow(0 0 15px rgba(0, 240, 255, 0.5))' }} />
+              <Sparkles size={24} color="var(--neon-cyan)" style={{ position: 'absolute', top: -12, right: -12 }} className="glow-icon" />
+            </div>
             <h2 className="text-gradient" style={{ fontSize: '2.2rem' }}>Bem-vindo(a), <span>{currentUser.nomeCompleto}</span></h2>
           </div>
           <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)' }}>Você está acessando o painel de <strong><span>{currentTerreiro?.name || 'Terreiro'}</span></strong>.</p>
         </div>
         
-        {isAdmin && (
+        {isStaff && (
           <div className="banner-stats" style={{ display: 'flex', gap: '3rem' }}>
             <div className="stat-card" style={{ textAlign: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
@@ -105,7 +111,7 @@ export default function Dashboard() {
           )}
         </motion.div>
 
-        {isAdmin ? (
+        {isStaff ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             <motion.div variants={itemVariants} className="panel glass-panel" style={{ padding: '2rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1rem' }}>
@@ -114,57 +120,61 @@ export default function Dashboard() {
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                 {isMaster && (
+                 {isStaff && (
                    <button onClick={() => navigate('/terreiros')} className="glass-panel glow-fx" style={{ padding: '1.5rem', textAlign: 'left', background: 'linear-gradient(90deg, rgba(0, 240, 255, 0.1), transparent)', border: '1px solid var(--neon-cyan)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', borderRadius: 15 }}>
-                     <div style={{ background: 'var(--neon-cyan)', padding: '0.5rem', borderRadius: 8 }}><Building size={20} color="#000" /></div>
+                     <div style={{ background: 'var(--neon-cyan)', padding: '0.5rem', borderRadius: 8 }}><Building size={24} color="#000" /></div>
                      <div style={{ flex: 1 }}>
                        <div style={{ fontWeight: 800, fontSize: '1rem' }}>Gerenciar Casas</div>
-                       <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>Administração global de terreiros</div>
+                       <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>Administração de terreiros</div>
                      </div>
                      <ArrowRight size={18} />
                    </button>
                  )}
                  <button className="glass-panel glow-fx" style={{ padding: '1.2rem', textAlign: 'left', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', borderRadius: 15 }}>
-                   <div style={{ background: 'rgba(157, 78, 221, 0.2)', padding: '0.5rem', borderRadius: 8 }}><UserPlus size={20} color="var(--neon-purple)" /></div>
+                   <div style={{ background: 'rgba(157, 78, 221, 0.2)', padding: '0.5rem', borderRadius: 8 }}><UserPlus size={24} color="var(--neon-purple)" /></div>
                    <div style={{ flex: 1 }}>
                      <div style={{ fontWeight: 600 }}>Cadrastar Membro</div>
                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Adicionar novo integrante à casa</div>
                    </div>
                  </button>
                  <button className="glass-panel glow-fx" style={{ padding: '1.2rem', textAlign: 'left', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', borderRadius: 15 }}>
-                   <div style={{ background: 'rgba(0, 240, 255, 0.1)', padding: '0.5rem', borderRadius: 8 }}><CalendarPlus size={20} color="var(--neon-cyan)" /></div>
+                   <div style={{ background: 'rgba(0, 240, 255, 0.1)', padding: '0.5rem', borderRadius: 8 }}><CalendarPlus size={24} color="var(--neon-cyan)" /></div>
                    <div style={{ flex: 1 }}>
                      <div style={{ fontWeight: 600 }}>Nova Gira/Evento</div>
                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Agendar atividades no calendário</div>
                    </div>
                  </button>
-                 <button onClick={() => navigate('/settings')} className="glass-panel glow-fx" style={{ padding: '1.2rem', textAlign: 'left', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', borderRadius: 15 }}>
-                   <div style={{ background: 'rgba(255, 215, 0, 0.1)', padding: '0.5rem', borderRadius: 8 }}><SettingsIcon size={20} color="var(--accent-gold)" /></div>
-                   <div style={{ flex: 1 }}>
-                     <div style={{ fontWeight: 600 }}>Configurações</div>
-                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ajustes do sistema e integrações</div>
-                   </div>
-                 </button>
+                 {isAdmin && (
+                   <button onClick={() => navigate('/settings')} className="glass-panel glow-fx" style={{ padding: '1.2rem', textAlign: 'left', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', borderRadius: 15 }}>
+                     <div style={{ background: 'rgba(255, 215, 0, 0.1)', padding: '0.5rem', borderRadius: 8 }}><SettingsIcon size={24} color="var(--accent-gold)" /></div>
+                     <div style={{ flex: 1 }}>
+                       <div style={{ fontWeight: 600 }}>Configurações</div>
+                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ajustes do sistema e integrações</div>
+                     </div>
+                   </button>
+                 )}
               </div>
             </motion.div>
 
-            <motion.div 
-              variants={itemVariants} 
-              className="glass-panel holo-card" 
-              style={{ padding: '2rem', cursor: 'pointer', background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.1), rgba(176, 0, 255, 0.1))', border: '1px solid var(--neon-cyan)' }}
-              onClick={() => navigate('/hub-ia')}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                <Sparkles size={24} color="var(--neon-cyan)" className="glow-icon" />
-                <h3 style={{ fontSize: '1.4rem', margin: 0 }}>Centro de IA Espiritual</h3>
-              </div>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Acesse conhecimentos ancestrais, pontos e ervas com o poder da nossa IA especializada.</p>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.7rem', padding: '0.3rem 0.6rem', background: 'rgba(0, 240, 255, 0.1)', color: 'var(--neon-cyan)', borderRadius: '20px', border: '1px solid var(--neon-cyan)' }}>PONTOS</span>
-                <span style={{ fontSize: '0.7rem', padding: '0.3rem 0.6rem', background: 'rgba(176, 0, 255, 0.1)', color: 'var(--neon-purple)', borderRadius: '20px', border: '1px solid var(--neon-purple)' }}>ERVAS</span>
-                <span style={{ fontSize: '0.7rem', padding: '0.3rem 0.6rem', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)' }}>ESTUDOS</span>
-              </div>
-            </motion.div>
+            {(isAdmin || role === 'FINANCEIRO') && (
+              <motion.div 
+                variants={itemVariants} 
+                className="glass-panel holo-card" 
+                style={{ padding: '2rem', cursor: 'pointer', background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.1), rgba(176, 0, 255, 0.1))', border: '1px solid var(--neon-cyan)' }}
+                onClick={() => navigate('/hub-ia')}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                  <Sparkles size={28} color="var(--neon-cyan)" className="glow-icon" />
+                  <h3 style={{ fontSize: '1.4rem', margin: 0 }}>Centro de IA Espiritual</h3>
+                </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Acesse conhecimentos ancestrais, pontos e ervas com o poder da nossa IA especializada.</p>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.7rem', padding: '0.3rem 0.6rem', background: 'rgba(0, 240, 255, 0.1)', color: 'var(--neon-cyan)', borderRadius: '20px', border: '1px solid var(--neon-cyan)' }}>PONTOS</span>
+                  <span style={{ fontSize: '0.7rem', padding: '0.3rem 0.6rem', background: 'rgba(176, 0, 255, 0.1)', color: 'var(--neon-purple)', borderRadius: '20px', border: '1px solid var(--neon-purple)' }}>ERVAS</span>
+                  <span style={{ fontSize: '0.7rem', padding: '0.3rem 0.6rem', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)' }}>ESTUDOS</span>
+                </div>
+              </motion.div>
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -196,24 +206,6 @@ export default function Dashboard() {
               </div>
             </motion.div>
 
-            <motion.div 
-              variants={itemVariants} 
-              className="glass-panel holo-card" 
-              style={{ padding: '2rem', cursor: 'pointer', background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.05), rgba(176, 0, 255, 0.05))', border: '1px solid var(--neon-purple)' }}
-              onClick={() => navigate('/hub-ia')}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                <Sparkles size={24} color="var(--neon-purple)" className="glow-icon" />
-                <h3 style={{ fontSize: '1.4rem', margin: 0 }}>Centro de IA Espiritual</h3>
-              </div>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Consulte pontos, ervas e estudos para seu desenvolvimento espiritual.</p>
-              <button 
-                className="glass-panel glow-fx" 
-                style={{ padding: '0.8rem 1.5rem', background: 'rgba(176, 0, 255, 0.1)', color: 'var(--neon-purple)', border: '1px solid var(--neon-purple)', borderRadius: '10px', cursor: 'pointer', fontWeight: 600, width: '100%', textAlign: 'center' }}
-              >
-                ACESSAR HUB IA
-              </button>
-            </motion.div>
           </div>
         )}
       </div>

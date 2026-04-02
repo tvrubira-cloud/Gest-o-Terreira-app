@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { useStore, defaultSpiritualData } from '../store/useStore';
+import { useStore } from '../store/useStore';
 import { Upload, Save, Building, Trash2, AlertTriangle, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { compressImage } from '../utils/image';
 import { motion } from 'framer-motion';
 import ConfirmationModal from '../components/ConfirmationModal';
+import ImportModal from '../components/ImportModal';
 
 export default function Settings() {
-  const { getCurrentTerreiro, updateTerreiro, deleteTerreiro, addUser, logout } = useStore();
+  const { getCurrentTerreiro, updateTerreiro, deleteTerreiro, logout } = useStore();
   const currentTerreiro = getCurrentTerreiro();
 
   const [terreiroName, setTerreiroName] = useState(currentTerreiro?.name || '');
@@ -16,6 +17,9 @@ export default function Settings() {
   const [importStatus, setImportStatus] = useState('');
   const [pixKey, setPixKey] = useState(currentTerreiro?.pixKey || '');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [tempHeaders, setTempHeaders] = useState<string[]>([]);
+  const [tempData, setTempData] = useState<any[]>([]);
 
   const handleSaveSettings = () => {
     if (!currentTerreiro) return;
@@ -48,38 +52,30 @@ export default function Settings() {
     setImportStatus('Lendo arquivo do banco de dados...');
     
     const reader = new FileReader();
-    reader.onload = async (evt) => {
+    reader.onload = (evt) => {
       try {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
+        
+        // Get headers (first row with data)
+        const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+        const headers: string[] = [];
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cell = ws[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
+          if (cell && cell.v) headers.push(cell.v.toString());
+        }
+
         const data = XLSX.utils.sheet_to_json(ws);
         
-        let count = 0;
-        for (const row of data as any[]) {
-          await addUser({
-            role: 'USER',
-            cpf: row.cpf?.toString() || row.CPF?.toString() || `imported-${Math.floor(Math.random() * 999999)}`,
-            nomeCompleto: row.nomeCompleto || row.Nome || row.nome || 'Usuário Sem Nome',
-            nomeDeSanto: row.nomeDeSanto || row['Nome de Santo'] || row.nome_de_santo || '',
-            dataNascimento: row.dataNascimento || row['Data Nascimento'] || row['Data de Nascimento'] || '',
-            rg: row.rg?.toString() || row.RG?.toString() || '',
-            endereco: row.endereco || row.Endereco || row['Endereço'] || row.endereco_completo || '',
-            telefone: row.telefone || row.Telefone || row.celular || '',
-            email: row.email || row.Email || '',
-            profissao: row.profissao || row.Profissao || row['Profissão'] || '',
-            nomePais: row.nomePais || row['Nome dos Pais'] || row.nome_pais || '',
-            spiritual: defaultSpiritualData
-          });
-          count++;
-        }
-        
-        setImportStatus(`Importação concluída com sucesso! ${count} membro(s) adicionado(s) à casa.`);
-        setTimeout(() => setImportStatus(''), 5000);
+        setTempHeaders(headers);
+        setTempData(data);
+        setIsImportModalOpen(true);
+        setImportStatus('');
       } catch (err) {
-        console.error("Erro na importação:", err);
-        setImportStatus('Erro ao importar arquivo. Verifique o formato.');
+        console.error("Erro na leitura do arquivo:", err);
+        setImportStatus('Erro ao ler arquivo. Verifique o formato.');
         setTimeout(() => setImportStatus(''), 5000);
       }
     };
@@ -271,6 +267,17 @@ export default function Settings() {
         variant="danger"
         requiresInput={true}
         expectedInput={currentTerreiro?.name || ''}
+      />
+
+      <ImportModal 
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        headers={tempHeaders}
+        data={tempData}
+        onComplete={(count) => {
+          setImportStatus(`Importação concluída! ${count} membros adicionados com sucesso.`);
+          setTimeout(() => setImportStatus(''), 10000);
+        }}
       />
     </motion.div>
   );

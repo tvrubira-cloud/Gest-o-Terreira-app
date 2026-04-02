@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import bgImage from '../assets/bg.png';
+import logo from '../assets/logo.png';
 import '../App.css';
 
 export default function Login() {
@@ -101,6 +102,16 @@ export default function Login() {
         boxShadow: '0 20px 50px rgba(0,0,0,0.5), 0 0 40px rgba(157, 78, 221, 0.1)'
       }}>
         <div style={{ textAlign: 'center' }}>
+          <img 
+            src={logo} 
+            alt="ORUM.app Logo" 
+            style={{ 
+              width: '240px', 
+              height: 'auto', 
+              marginBottom: '1rem',
+              filter: 'url(#remove-black-bg) drop-shadow(0 0 20px rgba(0, 240, 255, 0.4))'
+            }} 
+          />
           <h1 className="text-gradient" style={{ 
             fontSize: '2rem', 
             marginBottom: '0.5rem', 
