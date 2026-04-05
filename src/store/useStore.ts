@@ -221,6 +221,8 @@ interface AppState {
   updateUser: (id: string, userData: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   addEvent: (event: Omit<Event, 'id' | 'terreiroId'>) => Promise<void>;
+  updateEvent: (id: string, eventData: Partial<Event>) => Promise<void>;
+  deleteEvent: (id: string) => Promise<void>;
   addCharge: (charge: Omit<Charge, 'id' | 'terreiroId' | 'createdAt'>) => Promise<void>;
   updateCharge: (id: string, data: Partial<Charge>) => Promise<void>;
   markChargeAsPaid: (chargeId: string, userId: string, isPaid: boolean) => Promise<void>;
@@ -228,6 +230,7 @@ interface AppState {
   addBankAccount: (account: Omit<BankAccount, 'id' | 'terreiroId'>) => Promise<void>;
   updateBankAccount: (id: string, data: Partial<BankAccount>) => Promise<void>;
   deleteBankAccount: (id: string) => Promise<void>;
+  sendPushToTerreiro: (terreiroId: string, title: string, body: string, url?: string) => Promise<void>;
   resetStore: () => void;
 }
 
@@ -913,10 +916,78 @@ export const useStore = create<AppState>()((set, get) => ({
         .single();
 
       if (!error && data) {
-        set({ events: [...get().events, dbToEvent(data)] });
+        const newEvent = dbToEvent(data);
+        set({ events: [...get().events, newEvent] });
+        // Fire push notification to all terreiro members (non-blocking)
+        get().sendPushToTerreiro(
+          currentTerreiroId,
+          `📅 Novo Evento: ${eventData.title}`,
+          eventData.description || `Evento agendado para ${eventData.date}`,
+          '/events'
+        ).catch(() => {/* silent */});
       }
     } finally {
       set({ isLoading: false });
+    }
+  },
+
+  updateEvent: async (id, eventData) => {
+    set({ isLoading: true });
+    try {
+      const updateData: any = {};
+      if (eventData.title !== undefined) updateData.title = eventData.title;
+      if (eventData.date !== undefined) updateData.date = eventData.date;
+      if (eventData.description !== undefined) updateData.description = eventData.description;
+
+      const { error } = await supabase
+        .from('events')
+        .update(updateData)
+        .eq('id', id);
+
+      if (!error) {
+        set({
+          events: get().events.map((e) => (e.id === id ? { ...e, ...eventData } : e)),
+        });
+      }
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  deleteEvent: async (id) => {
+    set({ isLoading: true });
+    try {
+      const { error } = await supabase.from('events').delete().eq('id', id);
+
+      if (!error) {
+        set({
+          events: get().events.filter((e) => e.id !== id),
+        });
+      }
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  // ─── Push Notification Action ────────────────────────────
+  sendPushToTerreiro: async (terreiroId, title, body, url = '/') => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl) return;
+
+      await fetch(
+        `${supabaseUrl}/functions/v1/send-push`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ terreiroId, title, body, url }),
+        }
+      );
+    } catch (err) {
+      console.warn('[Push] Falha ao enviar notificação push:', err);
     }
   },
 

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import bgImage from '../assets/bg.png';
 import logo from '../assets/logo.png';
 import '../App.css';
+import NotificationGate from './NotificationGate';
 
 export default function Layout() {
   const currentUser = useStore(state => state.currentUser);
@@ -68,7 +69,9 @@ export default function Layout() {
     );
   }
 
-  return (
+  const isMember = !isStaff;
+
+  const layoutContent = (
     <div className="app-container">
       <div className="bg-container">
         <img src={bgImage} alt="Background" className="bg-image" />
@@ -266,4 +269,8 @@ export default function Layout() {
       </div>
     </div>
   );
+
+  return isMember ? (
+    <NotificationGate>{layoutContent}</NotificationGate>
+  ) : layoutContent;
 }

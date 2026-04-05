@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Layout from './components/Layout';
+import NotificationGate from './components/NotificationGate';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Events from './pages/Events';
@@ -25,6 +26,13 @@ function App() {
   // Initialize Supabase data and restore session on startup
   useEffect(() => {
     const init = async () => {
+      // Register Service Worker for Web Push support
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch((err) => {
+          console.warn('[SW] Falha ao registrar:', err.message);
+        });
+      }
+
       await initializeData();
 
       // Restore session from localStorage
@@ -83,21 +91,23 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="admin/new-terreiro" element={<RegisterTerreiro />} />
-          <Route path="settings" element={<Settings />} />
-          <Route path="terreiros" element={<Terreiros />} />
-          <Route path="financeiro" element={<Financial />} />
-          <Route path="events" element={<Events />} />
-          <Route path="members" element={<Members />} />
-          <Route path="hub-ia" element={<SpiritualHub />} />
-        </Route>
-      </Routes>
+      <NotificationGate>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="admin/new-terreiro" element={<RegisterTerreiro />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="terreiros" element={<Terreiros />} />
+            <Route path="financeiro" element={<Financial />} />
+            <Route path="events" element={<Events />} />
+            <Route path="members" element={<Members />} />
+            <Route path="hub-ia" element={<SpiritualHub />} />
+          </Route>
+        </Routes>
+      </NotificationGate>
       <svg width="0" height="0" style={{ position: 'absolute' }}>
         <filter id="remove-black-bg" colorInterpolationFilters="sRGB">
           <feColorMatrix type="matrix" values="
