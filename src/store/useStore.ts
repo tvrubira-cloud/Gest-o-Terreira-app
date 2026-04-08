@@ -663,7 +663,11 @@ export const useStore = create<AppState>()((set, get) => ({
         };
       }
 
-      await supabase.from('terreiros').update(updateData).eq('id', id);
+      const { error } = await supabase.from('terreiros').update(updateData).eq('id', id);
+      if (error) {
+        console.error('Erro ao atualizar terreiro:', error.message);
+        throw new Error(error.message);
+      }
 
       set({
         terreiros: get().terreiros.map(t => t.id === id ? { ...t, ...terreiroData } : t),

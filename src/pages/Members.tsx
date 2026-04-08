@@ -3,7 +3,7 @@ import { useStore, defaultSpiritualData } from '../store/useStore';
 import type { User, SpiritualData } from '../store/useStore';
 import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { compressImage } from '../utils/image';
+import { uploadImage } from '../utils/uploadImage';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 export default function Members() {
@@ -21,6 +21,7 @@ export default function Members() {
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [activeTab, setActiveTab] = useState<'pessoal' | 'umbanda' | 'quimbanda' | 'nacao' | 'obrigacoes' | 'financeiro'>('pessoal');
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; userId: string; userName: string }>({
     isOpen: false,
     userId: '',
@@ -321,17 +322,20 @@ export default function Members() {
                         )}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                        <label className="glass-panel glow-fx" style={{ padding: '0.6rem 1.2rem', cursor: 'pointer', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid var(--neon-cyan)', color: '#fff', borderRadius: 8, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <Upload size={16} /> Carregar Foto
+                        <label className="glass-panel glow-fx" style={{ padding: '0.6rem 1.2rem', cursor: isUploadingPhoto ? 'wait' : 'pointer', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid var(--neon-cyan)', color: '#fff', borderRadius: 8, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isUploadingPhoto ? 0.7 : 1 }}>
+                          <Upload size={16} /> {isUploadingPhoto ? 'Enviando...' : 'Carregar Foto'}
                           <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => {
                             const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = async () => {
-                                const compressed = await compressImage(reader.result as string, 400, 400);
-                                setEditingUser({ ...editingUser, photoUrl: compressed });
-                              }
-                              reader.readAsDataURL(file);
+                            if (!file) return;
+                            setIsUploadingPhoto(true);
+                            try {
+                              const path = `fotos/${editingUser.id || `new_${Date.now()}`}.jpg`;
+                              const url = await uploadImage(file, path);
+                              setEditingUser({ ...editingUser, photoUrl: url });
+                            } catch (err: any) {
+                              alert(`Erro ao enviar foto: ${err.message}`);
+                            } finally {
+                              setIsUploadingPhoto(false);
                             }
                           }} />
                         </label>

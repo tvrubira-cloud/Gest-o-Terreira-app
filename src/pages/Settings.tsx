@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import { supabase } from '../lib/supabase';
 import { Upload, Save, Building, Trash2, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { compressImage } from '../utils/image';
+import { uploadImage } from '../utils/uploadImage';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../components/ConfirmationModal';
 import ImportModal from '../components/ImportModal';
@@ -18,6 +18,7 @@ export default function Settings() {
   const [importStatus, setImportStatus] = useState('');
   const [pixKey, setPixKey] = useState(currentTerreiro?.pixKey || '');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
   // Import flow
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -154,17 +155,19 @@ export default function Settings() {
               )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-              <label className="glass-panel glow-fx" style={{ padding: '0.6rem 1.2rem', cursor: 'pointer', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid var(--neon-cyan)', color: '#fff', borderRadius: 8, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Upload size={16} /> Alterar Logo
+              <label className="glass-panel glow-fx" style={{ padding: '0.6rem 1.2rem', cursor: isUploadingLogo ? 'wait' : 'pointer', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid var(--neon-cyan)', color: '#fff', borderRadius: 8, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isUploadingLogo ? 0.7 : 1 }}>
+                <Upload size={16} /> {isUploadingLogo ? 'Enviando...' : 'Alterar Logo'}
                 <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => {
                   const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onloadend = async () => {
-                      const compressed = await compressImage(reader.result as string, 400, 400);
-                      setLogoUrl(compressed);
-                    }
-                    reader.readAsDataURL(file);
+                  if (!file || !currentTerreiro) return;
+                  setIsUploadingLogo(true);
+                  try {
+                    const url = await uploadImage(file, `logos/terreiro-${currentTerreiro.id}.jpg`);
+                    setLogoUrl(url);
+                  } catch (err: any) {
+                    alert(`Erro ao enviar logo: ${err.message}`);
+                  } finally {
+                    setIsUploadingLogo(false);
                   }
                 }} />
               </label>
