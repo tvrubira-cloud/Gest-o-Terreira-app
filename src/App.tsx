@@ -27,11 +27,7 @@ function App() {
   useEffect(() => {
     const init = async () => {
       // Register Service Worker for Web Push support
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch((err) => {
-          console.warn('[SW] Falha ao registrar:', err.message);
-        });
-      }
+      // NotificationGate handles service worker registration for FCM
 
       await initializeData();
 
