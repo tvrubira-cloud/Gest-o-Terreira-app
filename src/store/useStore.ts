@@ -173,6 +173,10 @@ export interface Terreiro {
   pixKey?: string;
   isBlocked?: boolean;
   createdAt: string;
+  // Seguimento da casa (tradição(ões) praticada(s))
+  segmentoUmbanda: boolean;
+  segmentoKimbanda: boolean;
+  segmentoNacao: boolean;
 }
 
 interface AppState {
@@ -191,6 +195,7 @@ interface AppState {
 
   // Computed / Selectors
   getCurrentTerreiro: () => Terreiro | undefined;
+  getCurrentTerreiroSeguimento: () => { segmentoUmbanda: boolean; segmentoKimbanda: boolean; segmentoNacao: boolean };
   getFilteredUsers: () => User[];
   getFilteredEvents: () => Event[];
   getUserTerreiros: () => Terreiro[];
@@ -214,12 +219,13 @@ interface AppState {
   deleteTerreiro: (id: string) => Promise<void>;
   toggleBlockTerreiro: (id: string, blocked: boolean) => Promise<void>;
   registerTerreiro: (
-    terreiroData: { name: string; endereco: string; cep?: string; cidade?: string; estado?: string },
+    terreiroData: { name: string; endereco: string; cep?: string; cidade?: string; estado?: string; segmentoUmbanda?: boolean; segmentoKimbanda?: boolean; segmentoNacao?: boolean },
     adminData: Omit<User, 'id' | 'createdAt' | 'terreiroId' | 'role'>
   ) => Promise<boolean>;
   addUser: (userData: Omit<User, 'id' | 'createdAt' | 'terreiroId'>) => Promise<void>;
   updateUser: (id: string, userData: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
+  clearTerreiroMembers: () => Promise<void>;
   addEvent: (event: Omit<Event, 'id' | 'terreiroId'>) => Promise<void>;
   updateEvent: (id: string, eventData: Partial<Event>) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
@@ -237,6 +243,7 @@ interface AppState {
 // ─── Helpers: convert DB row ↔ App model ──────────────────────
 
 function dbToTerreiro(row: any): Terreiro {
+  const seg = row.seguimento || {};
   return {
     id: row.id,
     name: row.name,
@@ -250,6 +257,9 @@ function dbToTerreiro(row: any): Terreiro {
     pixKey: row.pix_key,
     isBlocked: row.is_blocked || false,
     createdAt: row.created_at,
+    segmentoUmbanda: seg.umbanda ?? true,
+    segmentoKimbanda: seg.kimbanda ?? false,
+    segmentoNacao: seg.nacao ?? false,
   };
 }
 
@@ -272,7 +282,7 @@ export function dbToUser(row: any): User {
     profissao: row.profissao || '',
     nomePais: row.nome_pais || '',
     photoUrl: row.photo_url || '',
-    spiritual: row.spiritual || defaultSpiritualData,
+    spiritual: { ...defaultSpiritualData, ...(row.spiritual || {}) },
     createdAt: row.created_at,
     terreiroId: row.terreiro_id,
   };
@@ -386,6 +396,39 @@ export const useStore = create<AppState>()((set, get) => ({
   getCurrentTerreiro: () => {
     const { terreiros, currentTerreiroId } = get();
     return terreiros.find(t => t.id === currentTerreiroId);
+  },
+
+  getCurrentTerreiroSeguimento: () => {
+    const { terreiros, users, currentTerreiroId } = get();
+    const terreiro = terreiros.find(t => t.id === currentTerreiroId);
+    if (!terreiro) return { segmentoUmbanda: true, segmentoKimbanda: false, segmentoNacao: false };
+
+    // Lê o seguimento diretamente do terreiro (fonte oficial)
+    // Fallback para admin user (terreiros antigos sem coluna seguimento)
+    const hasTerreiroSeguimento =
+      terreiro.segmentoUmbanda === true ||
+      terreiro.segmentoKimbanda === true ||
+      terreiro.segmentoNacao === true;
+
+    if (hasTerreiroSeguimento) {
+      return {
+        segmentoUmbanda: terreiro.segmentoUmbanda,
+        segmentoKimbanda: terreiro.segmentoKimbanda,
+        segmentoNacao: terreiro.segmentoNacao,
+      };
+    }
+
+    // Fallback: lê do admin da casa (terreiros cadastrados antes da migração)
+    const adminUser = users.find(u => u.id === terreiro.adminId);
+    if (adminUser?.spiritual) {
+      return {
+        segmentoUmbanda: adminUser.spiritual.segmentoUmbanda ?? true,
+        segmentoKimbanda: adminUser.spiritual.segmentoKimbanda ?? false,
+        segmentoNacao: adminUser.spiritual.segmentoNacao ?? false,
+      };
+    }
+
+    return { segmentoUmbanda: true, segmentoKimbanda: false, segmentoNacao: false };
   },
 
   getFilteredUsers: () => {
@@ -606,6 +649,20 @@ export const useStore = create<AppState>()((set, get) => ({
       if (terreiroData.pixKey !== undefined) updateData.pix_key = terreiroData.pixKey;
       if (terreiroData.isBlocked !== undefined) updateData.is_blocked = terreiroData.isBlocked;
 
+      // Atualiza seguimento se algum campo foi passado
+      if (
+        terreiroData.segmentoUmbanda !== undefined ||
+        terreiroData.segmentoKimbanda !== undefined ||
+        terreiroData.segmentoNacao !== undefined
+      ) {
+        const current = get().terreiros.find(t => t.id === id);
+        updateData.seguimento = {
+          umbanda: terreiroData.segmentoUmbanda ?? current?.segmentoUmbanda ?? true,
+          kimbanda: terreiroData.segmentoKimbanda ?? current?.segmentoKimbanda ?? false,
+          nacao: terreiroData.segmentoNacao ?? current?.segmentoNacao ?? false,
+        };
+      }
+
       await supabase.from('terreiros').update(updateData).eq('id', id);
 
       set({
@@ -671,6 +728,13 @@ export const useStore = create<AppState>()((set, get) => ({
         .limit(1);
       if (existing && existing.length > 0) return false;
 
+      // Monta o objeto de seguimento da casa
+      const seguimento = {
+        umbanda: terreiroData.segmentoUmbanda ?? true,
+        kimbanda: terreiroData.segmentoKimbanda ?? false,
+        nacao: terreiroData.segmentoNacao ?? false,
+      };
+
       // Create terreiro
       const { data: newTerreiro, error: tError } = await supabase
         .from('terreiros')
@@ -680,6 +744,7 @@ export const useStore = create<AppState>()((set, get) => ({
           logo_url: '',
           admin_id: '',
           master_id: currentUser?.isMaster ? currentUser.id : null,
+          seguimento,
         })
         .select()
         .single();
@@ -690,7 +755,7 @@ export const useStore = create<AppState>()((set, get) => ({
         return false;
       }
 
-      // Create admin user
+      // Create admin user — spiritual recebe o mesmo seguimento da casa
       const { data: newAdmin, error: uErr } = await supabase
         .from('users')
         .insert({
@@ -708,6 +773,9 @@ export const useStore = create<AppState>()((set, get) => ({
           nome_pais: adminData.nomePais || '',
           spiritual: {
             ...adminData.spiritual,
+            segmentoUmbanda: seguimento.umbanda,
+            segmentoKimbanda: seguimento.kimbanda,
+            segmentoNacao: seguimento.nacao,
             cep: adminData.cep || adminData.spiritual?.cep || '',
             cidade: adminData.cidade || adminData.spiritual?.cidade || '',
             estado: adminData.estado || adminData.spiritual?.estado || '',
@@ -742,7 +810,8 @@ export const useStore = create<AppState>()((set, get) => ({
 
       const dbRole = (userData.role === 'FINANCEIRO' || userData.role === 'SECRETARIA') ? 'USER' : userData.role;
       const spiritualWithRole = {
-        ...userData.spiritual,
+        ...defaultSpiritualData,
+        ...(userData.spiritual || {}),
         appRole: userData.role,
         cep: userData.cep || userData.spiritual?.cep || '',
         cidade: userData.cidade || userData.spiritual?.cidade || '',
@@ -830,7 +899,7 @@ export const useStore = create<AppState>()((set, get) => ({
       // Handle the spiritual JSONB field
       // We merge existing spiritual data with new userData.spiritual, or individual flat fields if provided
       if (userData.role || userData.spiritual || userData.cep !== undefined || userData.cidade !== undefined || userData.estado !== undefined || userData.whatsapp !== undefined) {
-        const baseSpiritual = userData.spiritual || existingUser.spiritual || defaultSpiritualData;
+        const baseSpiritual = { ...defaultSpiritualData, ...(existingUser.spiritual || {}), ...(userData.spiritual || {}) };
         
         dbUpdate.spiritual = {
           ...baseSpiritual,
@@ -890,6 +959,45 @@ export const useStore = create<AppState>()((set, get) => ({
       });
     } catch (err) {
       console.error('Error deleting user:', err);
+      throw err;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  // Apaga somente os membros da casa atual, preservando o terreiro e o admin
+  clearTerreiroMembers: async () => {
+    set({ isLoading: true });
+    try {
+      const { currentTerreiroId, currentUser, users } = get();
+      if (!currentTerreiroId) return;
+
+      // Mantém o admin/currentUser — apaga todos os outros membros da casa
+      const adminId = currentUser?.id;
+      const toDelete = users.filter(
+        u => u.terreiroId === currentTerreiroId && u.id !== adminId
+      );
+
+      if (toDelete.length === 0) return;
+
+      const ids = toDelete.map(u => u.id);
+
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .in('id', ids);
+
+      if (error) {
+        console.error('Erro ao limpar membros:', error);
+        throw error;
+      }
+
+      set({
+        users: get().users.filter(u => !ids.includes(u.id)),
+        charges: get().charges.filter(c => !c.assignedTo.some(id => ids.includes(id))),
+      });
+    } catch (err) {
+      console.error('Erro ao limpar membros do terreiro:', err);
       throw err;
     } finally {
       set({ isLoading: false });

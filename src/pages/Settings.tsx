@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
-import { Upload, Save, Building, Trash2, AlertTriangle, X } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { Upload, Save, Building, Trash2, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { compressImage } from '../utils/image';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../components/ConfirmationModal';
 import ImportModal from '../components/ImportModal';
 
 export default function Settings() {
-  const { getCurrentTerreiro, updateTerreiro, deleteTerreiro, logout } = useStore();
+  const { getCurrentTerreiro, updateTerreiro, clearTerreiroMembers } = useStore();
   const currentTerreiro = getCurrentTerreiro();
 
   const [terreiroName, setTerreiroName] = useState(currentTerreiro?.name || '');
@@ -17,9 +18,12 @@ export default function Settings() {
   const [importStatus, setImportStatus] = useState('');
   const [pixKey, setPixKey] = useState(currentTerreiro?.pixKey || '');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [tempHeaders, setTempHeaders] = useState<string[]>([]);
-  const [tempData, setTempData] = useState<any[]>([]);
+
+  // Import flow
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importHeaders, setImportHeaders] = useState<string[]>([]);
+  const [importData, setImportData] = useState<any[]>([]);
+  const [importSuccess, setImportSuccess] = useState<{ count: number } | null>(null);
 
   const handleSaveSettings = () => {
     if (!currentTerreiro) return;
@@ -36,50 +40,85 @@ export default function Settings() {
   const handleDeleteDatabase = async () => {
     try {
       if (!currentTerreiro) return;
-      await deleteTerreiro(currentTerreiro.id);
-      logout();
-      window.location.href = '/login';
+      await clearTerreiroMembers();
+      setImportStatus('Membros removidos com sucesso. A casa foi preservada.');
+      setTimeout(() => setImportStatus(''), 4000);
     } catch (err) {
-      console.error("Erro ao deletar banco:", err);
-      alert("Erro ao deletar o banco de dados. Verifique sua conexão ou permissões.");
+      console.error("Erro ao limpar membros:", err);
+      alert("Erro ao remover os membros. Verifique sua conexão ou permissões.");
     }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
 
-    setImportStatus('Lendo arquivo do banco de dados...');
-    
+    setImportStatus('Lendo arquivo da planilha...');
+
+    const isCsv = file.name.toLowerCase().endsWith('.csv');
     const reader = new FileReader();
+
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        
-        // Get headers (first row with data)
-        const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+        let wb: import('xlsx').WorkBook;
+        const arrayBuffer = evt.target?.result as ArrayBuffer;
+        const dataUint8 = new Uint8Array(arrayBuffer);
+
+        if (isCsv) {
+          let text = '';
+          try {
+            text = new TextDecoder('utf-8', { fatal: true }).decode(dataUint8);
+          } catch {
+            text = new TextDecoder('windows-1252').decode(dataUint8);
+          }
+          wb = XLSX.read(text, { type: 'string' });
+        } else {
+          wb = XLSX.read(dataUint8, { type: 'array' });
+        }
+
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        if (!ws || !ws['!ref']) {
+          setImportStatus('Planilha vazia ou sem dados legíveis.');
+          setTimeout(() => setImportStatus(''), 5000);
+          return;
+        }
+
+        const range = XLSX.utils.decode_range(ws['!ref']);
         const headers: string[] = [];
         for (let C = range.s.c; C <= range.e.c; ++C) {
           const cell = ws[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
-          if (cell && cell.v) headers.push(cell.v.toString());
+          const val = cell?.v?.toString().trim();
+          if (val) headers.push(val);
         }
 
-        const data = XLSX.utils.sheet_to_json(ws);
-        
-        setTempHeaders(headers);
-        setTempData(data);
-        setIsImportModalOpen(true);
+        const data = XLSX.utils.sheet_to_json(ws, { defval: '' }) as any[];
+
+        if (data.length === 0) {
+          setImportStatus('Nenhum dado encontrado na planilha.');
+          setTimeout(() => setImportStatus(''), 5000);
+          return;
+        }
+
         setImportStatus('');
+        setImportHeaders(headers);
+        setImportData(data);
+        setImportModalOpen(true);
+
       } catch (err) {
-        console.error("Erro na leitura do arquivo:", err);
-        setImportStatus('Erro ao ler arquivo. Verifique o formato.');
-        setTimeout(() => setImportStatus(''), 5000);
+        console.error('Erro na leitura do arquivo:', err);
+        setImportStatus('Erro ao ler arquivo. Verifique o formato (.xlsx, .xls ou .csv).');
+        setTimeout(() => setImportStatus(''), 6000);
       }
     };
-    reader.readAsBinaryString(file);
+
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleImportComplete = (count: number) => {
+    setImportModalOpen(false);
+    setImportSuccess({ count });
+    setTimeout(() => setImportSuccess(null), 6000);
   };
 
   return (
@@ -183,6 +222,57 @@ export default function Settings() {
           >
             <Save size={18} /> SALVAR ALTERAÇÕES
           </button>
+
+          {/* Notificações */}
+          <div style={{ marginTop: '1rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <h4 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              Notificações Push
+            </h4>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Teste se o seu navegador está recebendo notificações do sistema.
+            </p>
+            <button
+              onClick={async () => {
+                setImportStatus('⌛ Enviando notificação de teste...');
+                try {
+                  const userJson = localStorage.getItem('terreiro-session');
+                  if (!userJson) return;
+                  const { userId } = JSON.parse(userJson);
+                  
+                  // Use separate direct fetch to our supabase edge function
+                  const { data: { session } } = await supabase.auth.getSession();
+                  
+                  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${session?.access_token || ''}`
+                    },
+                    body: JSON.stringify({
+                      userId: userId,
+                      title: 'Teste de Notificação',
+                      body: 'Se você está vendo isso, as notificações estão funcionando!',
+                      url: '/settings'
+                    })
+                  });
+                  
+                  if (response.ok) {
+                    setImportStatus('✅ Notificação de teste enviada!');
+                  } else {
+                    const err = await response.text();
+                    setImportStatus(`❌ Erro: ${err}`);
+                  }
+                } catch (err: any) {
+                  setImportStatus(`❌ Erro: ${err.message}`);
+                }
+                setTimeout(() => setImportStatus(''), 5000);
+              }}
+              className="glass-panel"
+              style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid var(--glass-border)', borderRadius: 8, cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              ENVIAR NOTIFICAÇÃO DE TESTE
+            </button>
+          </div>
         </div>
 
         {/* Importação e Perigo */}
@@ -216,11 +306,47 @@ export default function Settings() {
             </label>
             <input id="upload-db" type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleFileUpload} />
 
-            {importStatus && (
-              <div style={{ padding: '0.8rem', background: 'rgba(0, 240, 255, 0.1)', borderLeft: '3px solid var(--neon-cyan)', borderRadius: 4, fontSize: '0.85rem' }}>
-                {importStatus}
-              </div>
-            )}
+            <AnimatePresence>
+              {importStatus && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  style={{ padding: '0.8rem', background: 'rgba(0, 240, 255, 0.1)', borderLeft: '3px solid var(--neon-cyan)', borderRadius: 4, fontSize: '0.85rem' }}
+                >
+                  {importStatus}
+                </motion.div>
+              )}
+
+              {importSuccess && (
+                <motion.div
+                  key="success"
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.92 }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.8rem', padding: '1.5rem', background: 'rgba(0, 240, 255, 0.07)', border: '1px solid rgba(0, 240, 255, 0.3)', borderRadius: 12, textAlign: 'center' }}
+                >
+                  <CheckCircle2 size={42} color="var(--neon-cyan)" />
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--neon-cyan)', margin: 0 }}>
+                      Importação concluída!
+                    </p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.3rem 0 0' }}>
+                      {importSuccess.count} {importSuccess.count === 1 ? 'membro importado' : 'membros importados'} com sucesso.
+                    </p>
+                  </div>
+                  {/* Barra de progresso que esvazia após sucesso */}
+                  <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' }}>
+                    <motion.div
+                      initial={{ width: '100%' }}
+                      animate={{ width: '0%' }}
+                      transition={{ duration: 6, ease: 'linear' }}
+                      style={{ height: '100%', background: 'linear-gradient(90deg, var(--neon-cyan), var(--neon-purple))', borderRadius: 4 }}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="panel glass-panel" style={{ padding: '2rem', borderRadius: 'var(--panel-radius)', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid rgba(255, 76, 76, 0.3)' }}>
@@ -256,29 +382,27 @@ export default function Settings() {
         </div>
       </div>
 
-      <ConfirmationModal 
+      <ConfirmationModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleDeleteDatabase}
-        title="EXCLUSÃO TOTAL"
-        message={`AVISO CRÍTICO: Esta ação irá APAGAR TODOS os dados do terreiro "${currentTerreiro?.name}" (membros, eventos, financeiro e sua própria conta de administrador). Esta ação é IRREVERSÍVEL.`}
-        confirmLabel="APAGAR TUDO PERMANENTEMENTE"
+        title="LIMPAR BANCO DE MEMBROS"
+        message={`ATENÇÃO: Esta ação irá REMOVER TODOS OS MEMBROS do terreiro "${currentTerreiro?.name}". A casa, suas configurações e sua conta de administrador serão preservadas. Esta ação é IRREVERSÍVEL.`}
+        confirmLabel="SIM, REMOVER MEMBROS"
         cancelLabel="Cancelar"
         variant="danger"
         requiresInput={true}
         expectedInput={currentTerreiro?.name || ''}
       />
 
-      <ImportModal 
-        isOpen={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
-        headers={tempHeaders}
-        data={tempData}
-        onComplete={(count) => {
-          setImportStatus(`Importação concluída! ${count} membros adicionados com sucesso.`);
-          setTimeout(() => setImportStatus(''), 10000);
-        }}
+      <ImportModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        headers={importHeaders}
+        data={importData}
+        onComplete={handleImportComplete}
       />
+
     </motion.div>
   );
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
-import { Building2, UserPlus, Sparkles } from 'lucide-react';
+import { Building2, UserPlus, Sparkles, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function RegisterTerreiro() {
@@ -16,6 +16,11 @@ export default function RegisterTerreiro() {
   const [terreiroCep, setTerreiroCep] = useState('');
   const [terreiroCidade, setTerreiroCidade] = useState('');
   const [terreiroEstado, setTerreiroEstado] = useState('');
+
+  // Seguimento da casa
+  const [segmentoUmbanda, setSegmentoUmbanda] = useState(true);
+  const [segmentoKimbanda, setSegmentoKimbanda] = useState(false);
+  const [segmentoNacao, setSegmentoNacao] = useState(false);
   
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
@@ -56,13 +61,22 @@ export default function RegisterTerreiro() {
       return;
     }
 
+    if (!segmentoUmbanda && !segmentoKimbanda && !segmentoNacao) {
+      setError('Selecione ao menos um seguimento para a casa.');
+      setStep(1);
+      return;
+    }
+
     const success = await registerTerreiro(
-      { 
-        name: terreiroName, 
+      {
+        name: terreiroName,
         endereco: terreiroEndereco,
         cep: terreiroCep,
         cidade: terreiroCidade,
-        estado: terreiroEstado
+        estado: terreiroEstado,
+        segmentoUmbanda,
+        segmentoKimbanda,
+        segmentoNacao,
       },
       {
         cpf,
@@ -82,9 +96,9 @@ export default function RegisterTerreiro() {
         nomePais: '',
         spiritual: {
           situacaoCadastro: 'ativo',
-          segmentoUmbanda: true,
-          segmentoKimbanda: false,
-          segmentoNacao: false,
+          segmentoUmbanda,
+          segmentoKimbanda,
+          segmentoNacao,
           cidadeEstadoOrigem: '',
           umbandaOrigem: '',
           umbandaObrigaCabeca: '',
@@ -270,6 +284,52 @@ export default function RegisterTerreiro() {
                   onFocus={handleFocus} onBlur={handleBlur}
                   style={inputStyle}
                 />
+              </div>
+
+              {/* Seguimento da Casa */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <label style={labelStyle}>
+                  <Star size={13} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+                  Seguimento da Casa <span style={{ color: '#ff4c4c' }}>*</span>
+                </label>
+                <p style={{ fontSize: '0.78rem', color: '#6b7280', margin: 0 }}>
+                  Selecione a(s) tradição(ões) praticada(s) nesta casa. Isso preenche automaticamente os campos dos membros.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {([
+                    { key: 'umbanda',  label: 'Umbanda',          color: '#00f0ff', state: segmentoUmbanda,  set: setSegmentoUmbanda },
+                    { key: 'kimbanda', label: 'Quimbanda',         color: '#9D4EDD', state: segmentoKimbanda, set: setSegmentoKimbanda },
+                    { key: 'nacao',    label: 'Nação de Orixás',   color: '#ffd700', state: segmentoNacao,    set: setSegmentoNacao },
+                  ] as const).map(item => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => item.set(!item.state)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '0.8rem',
+                        padding: '0.85rem 1.1rem', borderRadius: 12, cursor: 'pointer',
+                        background: item.state ? `rgba(${item.color === '#00f0ff' ? '0,240,255' : item.color === '#9D4EDD' ? '157,78,221' : '255,215,0'}, 0.12)` : 'rgba(255,255,255,0.03)',
+                        border: `1.5px solid ${item.state ? item.color : 'rgba(255,255,255,0.1)'}`,
+                        color: item.state ? item.color : '#6b7280',
+                        fontWeight: item.state ? 700 : 400,
+                        fontSize: '0.9rem',
+                        transition: 'all 0.25s',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <div style={{
+                        width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                        border: `2px solid ${item.state ? item.color : 'rgba(255,255,255,0.2)'}`,
+                        background: item.state ? item.color : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.25s',
+                      }}>
+                        {item.state && <span style={{ color: '#000', fontSize: '0.65rem', fontWeight: 900 }}>✓</span>}
+                      </div>
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <button
