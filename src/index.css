@@ -141,7 +141,55 @@ body {
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--neon-purple); 
+  background: var(--neon-purple);
+}
+
+/* ── Tema Claro: Correções de legibilidade ─────────────────────── */
+
+/* Inputs, selects e textareas — garante texto escuro legível */
+[data-theme='light'] input:not([type='file']):not([type='checkbox']):not([type='radio']),
+[data-theme='light'] select,
+[data-theme='light'] textarea {
+  color: #1E293B !important;
+  background-color: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+[data-theme='light'] input::placeholder,
+[data-theme='light'] textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+/* Opções de select */
+[data-theme='light'] option {
+  background: #ffffff;
+  color: #1E293B;
+}
+
+/* Textos em tabelas */
+[data-theme='light'] td,
+[data-theme='light'] th {
+  color: var(--text-main) !important;
+}
+
+/* Textos gerais em linhas de tabela */
+[data-theme='light'] .hover-row td {
+  color: var(--text-main) !important;
+}
+
+/* Scrollbar no tema claro */
+[data-theme='light'] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18) !important;
+}
+
+/* Painéis glass no tema claro */
+[data-theme='light'] .glass-panel {
+  background: rgba(255, 255, 255, 0.78) !important;
+}
+
+/* Modal overlay — fundo levemente diferente no claro */
+[data-theme='light'] .modal-overlay {
+  background: rgba(0, 0, 0, 0.55) !important;
 }
 
 

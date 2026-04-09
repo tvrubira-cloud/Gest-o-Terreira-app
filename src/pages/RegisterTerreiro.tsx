@@ -140,11 +140,11 @@ export default function RegisterTerreiro() {
   };
 
   const inputStyle: React.CSSProperties = {
-    background: '#000',
-    border: '1px solid #3c1661',
+    background: 'var(--search-bg)',
+    border: '1px solid var(--glass-border)',
     borderRadius: '12px',
     padding: '1rem',
-    color: '#fff',
+    color: 'var(--text-main)',
     fontSize: '1rem',
     outline: 'none',
     fontFamily: "'Inter', sans-serif",
