@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useStore } from '../store/useStore';
-import { LayoutDashboard, Users, Calendar, Settings, LogOut, Hexagon, Search, Bell, ChevronDown, Building2, DollarSign, Lock, Sparkles, Sun, Moon, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Settings, LogOut, Hexagon, Search, Bell, ChevronDown, Building2, DollarSign, Lock, Sparkles, Sun, Moon, Menu, X, Megaphone } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import bgImage from '../assets/bg.png';
@@ -11,7 +11,8 @@ import NotificationGate from './NotificationGate';
 export default function Layout() {
   const currentUser = useStore(state => state.currentUser);
   const logout = useStore(state => state.logout);
-  const getCurrentTerreiro = useStore(state => state.getCurrentTerreiro);
+  const terreiros = useStore(state => state.terreiros);
+  const currentTerreiroId = useStore(state => state.currentTerreiroId);
   const getUserTerreiros = useStore(state => state.getUserTerreiros);
   const switchTerreiro = useStore(state => state.switchTerreiro);
   const theme = useStore(state => state.theme);
@@ -25,7 +26,7 @@ export default function Layout() {
     return <Navigate to="/login" replace />;
   }
 
-  const currentTerreiro = getCurrentTerreiro();
+  const currentTerreiro = terreiros.find(t => t.id === currentTerreiroId);
   const userTerreiros = getUserTerreiros();
   const isMaster = !!currentUser.isMaster || !!currentUser.isPanelAdmin;
   const role = currentUser.role?.toUpperCase();
@@ -38,6 +39,7 @@ export default function Layout() {
     { id: 'members', path: '/members', icon: Users, label: isStaff ? 'Membros da Casa' : 'Meu Perfil', adminOnly: false },
     { id: 'events', path: '/events', icon: Calendar, label: 'Agenda e Eventos', adminOnly: false },
     { id: 'financial', path: '/financeiro', icon: DollarSign, label: 'Financeiro', adminOnly: false },
+    { id: 'broadcast', path: '/broadcast', icon: Megaphone, label: 'Broadcast', adminOnly: true },
     { id: 'terreiros', path: '/terreiros', icon: Building2, label: 'Minhas Casas', adminOnly: true },
     { id: 'settings', path: '/settings', icon: Settings, label: 'Configurações', adminOnly: true },
   ];
