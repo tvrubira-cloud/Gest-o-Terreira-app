@@ -346,9 +346,9 @@ export default function Members() {
                                 }}
                                 style={{
                                   width: 26, height: 26, borderRadius: 6,
-                                  border: `1.5px solid ${on ? color : 'rgba(255,255,255,0.12)'}`,
+                                  border: `1.5px solid ${on ? color : 'var(--glass-border)'}`,
                                   background: on ? `${color}22` : 'transparent',
-                                  color: on ? color : 'rgba(255,255,255,0.25)',
+                                  color: on ? color : 'var(--text-muted)',
                                   fontSize: '0.7rem', fontWeight: 800,
                                   cursor: 'pointer', transition: 'all 0.2s',
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',

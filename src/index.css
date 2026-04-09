@@ -192,4 +192,10 @@ body {
   background: rgba(0, 0, 0, 0.55) !important;
 }
 
+/* Botões e labels com estilo de botão — texto legível no modo claro */
+[data-theme='light'] button,
+[data-theme='light'] label.glass-panel {
+  color: var(--text-main) !important;
+}
+
 
