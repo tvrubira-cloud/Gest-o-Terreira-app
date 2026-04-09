@@ -4,9 +4,10 @@ import { Calendar as CalendarIcon, Plus, Edit, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Events() {
-  const { addEvent, updateEvent, deleteEvent, currentUser, getFilteredEvents, getCurrentTerreiro } = useStore();
+  const { addEvent, updateEvent, deleteEvent, currentUser, getFilteredEvents, getCurrentTerreiro, terreiros } = useStore();
   const role = currentUser?.role?.toUpperCase();
-  const isAdmin = role === 'ADMIN' || currentUser?.isMaster || currentUser?.isPanelAdmin;
+  const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
+  const isAdmin = role === 'ADMIN' || isMaster;
   const events = getFilteredEvents();
   const currentTerreiro = getCurrentTerreiro();
 
@@ -130,8 +131,13 @@ export default function Events() {
           events.map(evt => (
             <div key={evt.id} className="panel glass-panel glow-fx" style={{ padding: '1.5rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', borderRadius: 'var(--panel-radius)' }}>
               <div>
-                <h3 style={{ fontSize: '1.3rem', color: 'var(--neon-cyan)', marginBottom: '0.5rem' }}>{evt.title}</h3>
-                <p style={{ color: 'var(--text-muted)' }}>{evt.description}</p>
+                 <h3 style={{ fontSize: '1.3rem', color: 'var(--neon-cyan)', marginBottom: '0.2rem' }}>{evt.title}</h3>
+                 {isMaster && (
+                   <div style={{ fontSize: '0.75rem', color: 'var(--neon-purple)', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                     {terreiros.find(t => t.id === evt.terreiroId)?.name || 'Geral'}
+                   </div>
+                 )}
+                 <p style={{ color: 'var(--text-muted)' }}>{evt.description}</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 {isAdmin && (

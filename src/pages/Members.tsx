@@ -7,7 +7,7 @@ import { uploadImage } from '../utils/uploadImage';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 export default function Members() {
-  const { currentUser, addUser, updateUser, deleteUser, getFilteredUsers, getCurrentTerreiro } = useStore();
+  const { currentUser, addUser, updateUser, deleteUser, getFilteredUsers, getCurrentTerreiro, terreiros } = useStore();
   const role = currentUser?.role?.toUpperCase();
   const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
   const isAdmin = role === 'ADMIN' || isMaster;
@@ -294,6 +294,7 @@ export default function Members() {
                   <th style={{ padding: '1.2rem' }}>Nome Completo</th>
                   <th style={{ padding: '1.2rem' }}>Nome de Santo</th>
                   <th style={{ padding: '1.2rem' }}>Cargo</th>
+                  {isMaster && <th style={{ padding: '1.2rem' }}>Terreiro</th>}
                   <th style={{ padding: '1.2rem' }}>Seguimento</th>
                   <th style={{ padding: '1.2rem' }}>Status</th>
                   <th style={{ padding: '1.2rem' }}>Ações</th>
@@ -324,6 +325,11 @@ export default function Members() {
                         {u.isMaster || u.isPanelAdmin ? 'MASTER' : (u.role === 'ADMIN' ? 'ADM' : (u.role === 'FINANCEIRO' ? 'FINAN' : (u.role === 'SECRETARIA' ? 'SEC' : 'MBR')))}
                       </span>
                     </td>
+                    {isMaster && (
+                      <td style={{ padding: '1rem', fontSize: '0.85rem' }}>
+                        {terreiros.find(t => t.id === u.terreiroId)?.name || 'N/A'}
+                      </td>
+                    )}
                     {/* Seguimento — badges clicáveis */}
                     <td style={{ padding: '1rem' }}>
                       {isStaff ? (

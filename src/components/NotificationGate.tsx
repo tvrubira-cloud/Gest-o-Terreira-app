@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import { Bell, BellOff, CheckCircle, RefreshCw, Settings } from 'lucide-react';
+import { getMessaging, isSupported } from 'firebase/messaging';
 import { getFCMToken } from '../lib/firebase';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
@@ -55,37 +56,47 @@ export default function NotificationGate({ children }: NotificationGateProps) {
       console.warn('[FCM] Falha ao salvar token:', err);
     }
   }, [currentUser, currentTerreiroId]);
-
   useEffect(() => {
-    // Registra o Service Worker do Firebase se suportado
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/firebase-messaging-sw.js')
-        .then(reg => console.log('[SW] FCM Service Worker registrado:', reg.scope))
-        .catch(err => console.error('[SW] Erro ao registrar FCM SW:', err));
-    }
+    const init = async () => {
+      // Check for FCM support first
+      const supported = await isSupported();
+      if (!supported) {
+        setStatus('granted');
+        return;
+      }
 
-    const perm = getPermissionState();
+      // Registra o Service Worker do Firebase se suportado
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' })
+          .then(reg => console.log('[SW] FCM Service Worker registrado:', reg.scope))
+          .catch(err => console.error('[SW] Erro ao registrar FCM SW:', err));
+      }
 
-    if (perm === 'unsupported') {
-      setStatus('granted');
-      return;
-    }
+      const perm = getPermissionState();
 
-    if (perm === 'granted') {
-      setStatus('granted');
-      registerFCMToken();
-      return;
-    }
+      if (perm === 'unsupported') {
+        setStatus('granted');
+        return;
+      }
 
-    if (perm === 'denied') {
-      setStatus('denied');
+      if (perm === 'granted') {
+        setStatus('granted');
+        registerFCMToken();
+        return;
+      }
+
+      if (perm === 'denied') {
+        setStatus('denied');
+        setTimeout(() => setVisible(true), 50);
+        return;
+      }
+
+      // default — show gate
+      setStatus('gate');
       setTimeout(() => setVisible(true), 50);
-      return;
-    }
+    };
 
-    // default — show gate
-    setStatus('gate');
-    setTimeout(() => setVisible(true), 50);
+    init();
   }, [registerFCMToken]);
 
   const requestPermission = async () => {

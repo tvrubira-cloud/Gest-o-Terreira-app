@@ -18,28 +18,33 @@ firebase.initializeApp({
   appId:             '1:557564729663:web:8e82c0424a45208a559b8a',
 });
 
-const messaging = firebase.messaging();
+let messaging = null;
+if (firebase.messaging.isSupported()) {
+  messaging = firebase.messaging();
+}
 
 // ── Notificações em background (browser fechado / tab em segundo plano) ──
-messaging.onBackgroundMessage((payload) => {
-  console.log('[FCM SW] Mensagem em background:', payload);
+if (messaging) {
+  messaging.onBackgroundMessage((payload) => {
+    console.log('[FCM SW] Mensagem em background:', payload);
 
-  const notification = payload.notification ?? {};
-  const data         = payload.data ?? {};
+    const notification = payload.notification ?? {};
+    const data         = payload.data ?? {};
 
-  const title   = notification.title || data.title || 'Terreiras App';
-  const options  = {
-    body:             notification.body  || data.body  || 'Você tem uma nova notificação.',
-    icon:             notification.icon  || '/favicon.svg',
-    badge:            '/favicon.svg',
-    tag:              data.tag           || 'terreiras-push',
-    data:             { url: data.url   || '/' },
-    vibrate:          [200, 100, 200],
-    requireInteraction: false,
-  };
+    const title   = notification.title || data.title || 'Terreiras App';
+    const options  = {
+      body:             notification.body  || data.body  || 'Você tem uma nova notificação.',
+      icon:             notification.icon  || '/favicon.svg',
+      badge:            '/favicon.svg',
+      tag:              data.tag           || 'terreiras-push',
+      data:             { url: data.url   || '/' },
+      vibrate:          [200, 100, 200],
+      requireInteraction: false,
+    };
 
-  self.registration.showNotification(title, options);
-});
+    self.registration.showNotification(title, options);
+  });
+}
 
 // ── Clique na notificação → abre / foca o app ──
 self.addEventListener('notificationclick', (event) => {

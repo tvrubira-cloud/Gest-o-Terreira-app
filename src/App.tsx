@@ -27,13 +27,10 @@ function App() {
   // Initialize Supabase data and restore session on startup
   useEffect(() => {
     const init = async () => {
-      // Register Service Worker for Web Push support
-      // NotificationGate handles service worker registration for FCM
-
-      await initializeData();
-
-      // Restore session from localStorage
+      // 1. Restore session from localStorage first
       const session = localStorage.getItem('terreiro-session');
+      let restoredTerreiroId = '';
+      
       if (session) {
         try {
           const { userId, terreiroId } = JSON.parse(session);
@@ -45,9 +42,10 @@ function App() {
 
           if (!error && data?.[0]) {
             const user = dbToUser(data[0]);
+            restoredTerreiroId = terreiroId || user.terreiroId;
             useStore.setState({
               currentUser: user,
-              currentTerreiroId: terreiroId || user.terreiroId,
+              currentTerreiroId: restoredTerreiroId,
             });
           } else {
             if (error) console.error('❌ Erro ao restaurar sessão:', error.message);
@@ -57,6 +55,10 @@ function App() {
           localStorage.removeItem('terreiro-session');
         }
       }
+
+      // 2. Now initialize data with the target terreiroId
+      await initializeData(restoredTerreiroId);
+
       setRestoring(false);
     };
     init();

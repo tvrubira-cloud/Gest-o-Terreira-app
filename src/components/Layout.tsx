@@ -20,15 +20,27 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [showTerreiroDropdown, setShowTerreiroDropdown] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Hooks must be called at the top, before any conditional returns
+  const broadcasts = useStore(state => state.broadcasts);
+  const currentTerreiro = terreiros.find(t => t.id === currentTerreiroId);
+
+  const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
+
+  // Filter broadcasts like in Dashboard
+  const filteredBroadcasts = broadcasts
+    .filter(b => isMaster || b.isGlobal || b.terreiroId === currentTerreiroId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  
+  const unreadCount = filteredBroadcasts.length;
 
   if (!currentUser) {
     return <Navigate to="/login" replace />;
   }
 
-  const currentTerreiro = terreiros.find(t => t.id === currentTerreiroId);
   const userTerreiros = getUserTerreiros();
-  const isMaster = !!currentUser.isMaster || !!currentUser.isPanelAdmin;
   const role = currentUser.role?.toUpperCase();
   const isAdmin = role === 'ADMIN' || isMaster;
   const isStaff = isAdmin || role === 'FINANCEIRO' || role === 'SECRETARIA';
@@ -147,6 +159,33 @@ export default function Layout() {
                   <div style={{ padding: '0.5rem 0.8rem', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', borderBottom: '1px solid var(--glass-border)' }}>
                     Trocar de Casa
                   </div>
+                  {currentUser?.isMaster && (
+                     <button
+                       onClick={() => {
+                         switchTerreiro('');
+                         setShowTerreiroDropdown(false);
+                       }}
+                       style={{
+                         width: '100%',
+                         padding: '0.7rem 0.8rem',
+                         background: !currentTerreiro ? 'var(--bg-grad-1)' : 'transparent',
+                         border: 'none',
+                         color: !currentTerreiro ? 'var(--neon-cyan)' : 'var(--text-muted)',
+                         cursor: 'pointer',
+                         textAlign: 'left',
+                         fontSize: '0.85rem',
+                         display: 'flex',
+                         alignItems: 'center',
+                         gap: '0.5rem',
+                         borderBottom: '1px solid rgba(255,255,255,0.05)'
+                       }}
+                       onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                       onMouseOut={e => e.currentTarget.style.background = !currentTerreiro ? 'var(--bg-grad-1)' : 'transparent'}
+                     >
+                       <Building2 size={16} />
+                       Visualização Geral (Master)
+                     </button>
+                   )}
                   {userTerreiros.map(t => (
                     <button
                       key={t.id}
@@ -194,7 +233,7 @@ export default function Layout() {
 
               // Financeiro (Tudo menos Configurações)
               if (role === 'FINANCEIRO') {
-                return ['dashboard', 'hub-ia', 'members', 'events', 'financial', 'terreiros'].includes(item.id);
+                return ['dashboard', 'hub-ia', 'members', 'events', 'financial', 'terreiros', 'broadcast'].includes(item.id);
               }
 
               // Secretaria (Dashboard, Membros, Agenda/Eventos, Minhas Casas)
@@ -253,9 +292,115 @@ export default function Layout() {
               <button className="icon-btn glow-fx" onClick={toggleTheme} title="Alternar Tema Claro/Escuro" style={{ color: theme === 'dark' ? 'var(--accent-gold)' : 'var(--neon-purple)' }}>
                 {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
               </button>
-              <button className="icon-btn glow-fx" title="Notificações">
-                <Bell size={20} />
-              </button>
+              
+              <div style={{ position: 'relative' }}>
+                <button 
+                  className="icon-btn glow-fx" 
+                  title="Notificações"
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  style={{ color: showNotifications ? 'var(--neon-cyan)' : 'var(--text-main)' }}
+                >
+                  <Bell size={20} />
+                  {unreadCount > 0 && (
+                    <span style={{
+                      position: 'absolute',
+                      top: -5,
+                      right: -5,
+                      background: 'var(--neon-purple)',
+                      color: 'white',
+                      fontSize: '0.65rem',
+                      width: 18,
+                      height: 18,
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      border: '2px solid var(--bg-primary)'
+                    }}>
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {showNotifications && (
+                  <div className="glass-panel" style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    marginTop: '1rem',
+                    width: '320px',
+                    maxHeight: '400px',
+                    overflowY: 'auto',
+                    zIndex: 1000,
+                    padding: '1rem',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                    border: '1px solid var(--glass-border)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--glass-border)' }}>
+                      <span style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Bell size={16} color="var(--neon-purple)" /> Notificações
+                      </span>
+                      <button 
+                        onClick={() => setShowNotifications(false)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                      {filteredBroadcasts.length === 0 ? (
+                        <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>Sem notificações.</p>
+                      ) : (
+                        filteredBroadcasts.slice(0, 5).map(b => (
+                          <div 
+                            key={b.id} 
+                            style={{ 
+                              padding: '0.8rem', 
+                              borderRadius: '8px', 
+                              background: 'rgba(255,255,255,0.03)',
+                              cursor: 'pointer',
+                              borderLeft: `3px solid ${b.isGlobal ? 'var(--neon-purple)' : 'var(--neon-cyan)'}`
+                            }}
+                            onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+                            onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                            onClick={() => {
+                              navigate('/dashboard');
+                              setShowNotifications(false);
+                            }}
+                          >
+                            <h5 style={{ fontSize: '0.9rem', marginBottom: '0.2rem', color: '#fff' }}>{b.title}</h5>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {b.body}
+                            </p>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.6 }}>
+                              {new Date(b.createdAt).toLocaleDateString('pt-BR')}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                      {filteredBroadcasts.length > 0 && (
+                        <button 
+                          onClick={() => { navigate('/dashboard'); setShowNotifications(false); }}
+                          style={{ 
+                            background: 'transparent', 
+                            border: 'none', 
+                            color: 'var(--neon-cyan)', 
+                            fontSize: '0.8rem', 
+                            cursor: 'pointer',
+                            marginTop: '0.5rem',
+                            fontWeight: 600
+                          }}
+                        >
+                          Ver todas no Dashboard
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="user-profile">
                 {currentUser.photoUrl ? (
                   <img src={currentUser.photoUrl} alt="Avatar" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--neon-cyan)' }} />
