@@ -294,6 +294,7 @@ export default function Members() {
                   <th style={{ padding: '1.2rem' }}>Nome Completo</th>
                   <th style={{ padding: '1.2rem' }}>Nome de Santo</th>
                   <th style={{ padding: '1.2rem' }}>Cargo</th>
+                  <th style={{ padding: '1.2rem' }}>Seguimento</th>
                   <th style={{ padding: '1.2rem' }}>Status</th>
                   <th style={{ padding: '1.2rem' }}>Ações</th>
                 </tr>
@@ -323,8 +324,46 @@ export default function Members() {
                         {u.isMaster || u.isPanelAdmin ? 'MASTER' : (u.role === 'ADMIN' ? 'ADM' : (u.role === 'FINANCEIRO' ? 'FINAN' : (u.role === 'SECRETARIA' ? 'SEC' : 'MBR')))}
                       </span>
                     </td>
+                    {/* Seguimento — badges clicáveis */}
                     <td style={{ padding: '1rem' }}>
-                      <span style={{ 
+                      {isStaff ? (
+                        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          {([
+                            { field: 'segmentoUmbanda'  as const, label: 'U', title: 'Umbanda',   color: '#00f0ff' },
+                            { field: 'segmentoKimbanda' as const, label: 'Q', title: 'Quimbanda', color: '#9D4EDD' },
+                            { field: 'segmentoNacao'    as const, label: 'N', title: 'Nação',     color: '#ffd700' },
+                          ]).map(({ field, label, title, color }) => {
+                            const on = !!u.spiritual?.[field];
+                            return (
+                              <button
+                                key={field}
+                                title={`${on ? 'Remover' : 'Adicionar'} ${title}`}
+                                onClick={async () => {
+                                  await updateUser(u.id, {
+                                    ...u,
+                                    spiritual: { ...u.spiritual!, [field]: !on }
+                                  });
+                                }}
+                                style={{
+                                  width: 26, height: 26, borderRadius: 6,
+                                  border: `1.5px solid ${on ? color : 'rgba(255,255,255,0.12)'}`,
+                                  background: on ? `${color}22` : 'transparent',
+                                  color: on ? color : 'rgba(255,255,255,0.25)',
+                                  fontSize: '0.7rem', fontWeight: 800,
+                                  cursor: 'pointer', transition: 'all 0.2s',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>—</span>}
+                    </td>
+
+                    <td style={{ padding: '1rem' }}>
+                      <span style={{
                         padding: '0.3rem 0.8rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 900, textTransform: 'uppercase',
                         background: u.spiritual?.situacaoCadastro === 'ativo' ? 'rgba(0, 255, 128, 0.1)' : 'rgba(255, 76, 76, 0.1)',
                         color: u.spiritual?.situacaoCadastro === 'ativo' ? '#00eeff' : '#ff4c4c',
