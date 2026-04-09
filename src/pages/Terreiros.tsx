@@ -60,7 +60,10 @@ export default function Terreiros() {
         name: editingTerreiro.name || '',
         endereco: editingTerreiro.endereco || '',
         logoUrl: editingTerreiro.logoUrl || '',
-        adminId: currentUser.id
+        adminId: currentUser.id,
+        segmentoUmbanda: editingTerreiro.segmentoUmbanda ?? true,
+        segmentoKimbanda: editingTerreiro.segmentoKimbanda ?? false,
+        segmentoNacao: editingTerreiro.segmentoNacao ?? false,
       });
     }
     
