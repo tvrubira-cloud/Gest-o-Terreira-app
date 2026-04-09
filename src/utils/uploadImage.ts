@@ -10,34 +10,37 @@ function compressToBlob(
   quality = 0.75
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Falha ao ler o arquivo de imagem.'));
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('Falha ao carregar a imagem.'));
-      img.onload = () => {
-        let { width, height } = img;
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
 
-        if (width > height) {
-          if (width > maxWidth) { height = Math.round(height * maxWidth / width); width = maxWidth; }
-        } else {
-          if (height > maxHeight) { width = Math.round(width * maxHeight / height); height = maxHeight; }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext('2d')?.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob(
-          (blob) => blob ? resolve(blob) : reject(new Error('Falha ao comprimir a imagem.')),
-          'image/jpeg',
-          quality
-        );
-      };
-      img.src = e.target?.result as string;
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Formato de imagem não suportado. Use JPEG, PNG ou WebP.'));
     };
-    reader.readAsDataURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      let { width, height } = img;
+
+      if (width > height) {
+        if (width > maxWidth) { height = Math.round(height * maxWidth / width); width = maxWidth; }
+      } else {
+        if (height > maxHeight) { width = Math.round(width * maxHeight / height); height = maxHeight; }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d')?.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => blob ? resolve(blob) : reject(new Error('Falha ao comprimir a imagem.')),
+        'image/jpeg',
+        quality
+      );
+    };
+
+    img.src = objectUrl;
   });
 }
 
