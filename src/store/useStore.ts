@@ -247,7 +247,7 @@ function dbToTerreiro(row: any): Terreiro {
   return {
     id: row.id,
     name: row.name,
-    logoUrl: row.logo_url || '',
+    logoUrl: (row.logo_url && !row.logo_url.startsWith('data:')) ? row.logo_url : '',
     endereco: row.endereco || '',
     cep: row.cep || '',
     cidade: row.cidade || '',
@@ -281,7 +281,7 @@ export function dbToUser(row: any): User {
     email: row.email || '',
     profissao: row.profissao || '',
     nomePais: row.nome_pais || '',
-    photoUrl: row.photo_url || '',
+    photoUrl: (row.photo_url && !row.photo_url.startsWith('data:')) ? row.photo_url : '',
     spiritual: { ...defaultSpiritualData, ...(row.spiritual || {}) },
     createdAt: row.created_at,
     terreiroId: row.terreiro_id,
