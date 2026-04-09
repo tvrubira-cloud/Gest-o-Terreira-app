@@ -30,10 +30,13 @@ interface ServiceAccount {
 }
 
 interface PushPayload {
-  terreiroId: string;
-  title:      string;
-  body:       string;
-  url?:       string;
+  terreiroId?: string;
+  userId?: string;
+  role?: string;
+  isBroadcast?: boolean;
+  title:       string;
+  body:        string;
+  url?:        string;
 }
 
 // ── Cria JWT assinado com RS256 ──────────────────────────────
@@ -114,10 +117,11 @@ serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { terreiroId, title, body, url = '/' }: PushPayload = await req.json();
-    if (!terreiroId || !title || !body) {
+    const { terreiroId, userId, role, isBroadcast, title, body, url = '/' }: PushPayload = await req.json();
+    
+    if (!title || !body) {
       return new Response(
-        JSON.stringify({ error: 'Campos obrigatórios: terreiroId, title, body' }),
+        JSON.stringify({ error: 'Campos obrigatórios: title, body' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -125,12 +129,36 @@ serve(async (req: Request) => {
     // Parse service account
     const sa: ServiceAccount = JSON.parse(atob(FCM_SERVICE_ACCOUNT_B64));
 
-    // Busca tokens FCM do terreiro
+    // Busca tokens FCM (específico ou broadcast)
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE);
-    const { data: rows, error } = await supabase
-      .from('push_tokens')
-      .select('token')
-      .eq('terreiro_id', terreiroId);
+    
+    let query;
+    
+    if (userId) {
+      // Alvo: usuário específico
+      query = supabase.from('push_tokens').select('token').eq('user_id', userId);
+    } else if (role) {
+      // Alvo: role específica (join com users)
+      query = supabase.from('push_tokens')
+        .select('token, users!inner(role)')
+        .eq('users.role', role);
+      if (terreiroId) {
+        query = query.eq('terreiro_id', terreiroId);
+      }
+    } else if (isBroadcast) {
+      // Alvo: global
+      query = supabase.from('push_tokens').select('token');
+    } else if (terreiroId) {
+      // Alvo: todo o terreiro
+      query = supabase.from('push_tokens').select('token').eq('terreiro_id', terreiroId);
+    } else {
+      return new Response(
+        JSON.stringify({ error: 'Nenhum alvo (terreiroId, userId, role ou isBroadcast) especificado' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: rows, error } = await query;
 
     if (error) throw error;
     if (!rows?.length) {

@@ -11,6 +11,7 @@ import RegisterTerreiro from './pages/RegisterTerreiro';
 import Terreiros from './pages/Terreiros';
 import Financial from './pages/Financial';
 import SpiritualHub from './pages/SpiritualHub';
+import Broadcast from './pages/Broadcast';
 import { useStore, dbToUser } from './store/useStore';
 import { supabase } from './lib/supabase';
 
@@ -101,6 +102,7 @@ function App() {
             <Route path="events" element={<Events />} />
             <Route path="members" element={<Members />} />
             <Route path="hub-ia" element={<SpiritualHub />} />
+            <Route path="broadcast" element={<Broadcast />} />
           </Route>
         </Routes>
       </NotificationGate>

@@ -236,6 +236,7 @@ interface AppState {
   addBankAccount: (account: Omit<BankAccount, 'id' | 'terreiroId'>) => Promise<void>;
   updateBankAccount: (id: string, data: Partial<BankAccount>) => Promise<void>;
   deleteBankAccount: (id: string) => Promise<void>;
+  sendPush: (params: { terreiroId?: string; userId?: string; role?: string; title: string; body: string; url?: string }) => Promise<void>;
   sendPushToTerreiro: (terreiroId: string, title: string, body: string, url?: string) => Promise<void>;
   resetStore: () => void;
 }
@@ -849,6 +850,14 @@ export const useStore = create<AppState>()((set, get) => ({
 
       if (!error && data) {
         set({ users: [...get().users, dbToUser(data)] });
+        
+        // Notify the new user
+        get().sendPush({
+          userId: data.id,
+          title: 'Bem-vindo(a)!',
+          body: `Seu cadastro no ${get().getCurrentTerreiro()?.name || 'Terreiro'} foi concluído.`,
+          url: '/'
+        }).catch(() => {});
       } else if (error) {
         console.error('❌ Erro ao adicionar usuário no Supabase:', error.message);
         throw error;
@@ -942,6 +951,14 @@ export const useStore = create<AppState>()((set, get) => ({
       if (currentUser && currentUser.id === id) {
         set({ currentUser: updatedUser });
       }
+
+      // Notify user about profile update
+      get().sendPush({
+        userId: id,
+        title: 'Perfil Atualizado',
+        body: 'Suas informações de perfil foram atualizadas com sucesso.',
+        url: '/profile'
+      }).catch(() => {});
     } finally {
       set({ isLoading: false });
     }
@@ -1082,7 +1099,7 @@ export const useStore = create<AppState>()((set, get) => ({
   },
 
   // ─── Push Notification Action ────────────────────────────
-  sendPushToTerreiro: async (terreiroId, title, body, url = '/') => {
+  sendPush: async ({ terreiroId, userId, role, title, body, url = '/' }) => {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       if (!supabaseUrl) return;
@@ -1095,12 +1112,16 @@ export const useStore = create<AppState>()((set, get) => ({
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
           },
-          body: JSON.stringify({ terreiroId, title, body, url }),
+          body: JSON.stringify({ terreiroId, userId, role, title, body, url }),
         }
       );
     } catch (err) {
       console.warn('[Push] Falha ao enviar notificação push:', err);
     }
+  },
+
+  sendPushToTerreiro: async (terreiroId, title, body, url = '/') => {
+    return get().sendPush({ terreiroId, title, body, url });
   },
 
   // ─── Charge Actions ─────────────────────────────────────
@@ -1183,6 +1204,16 @@ export const useStore = create<AppState>()((set, get) => ({
           c.id === chargeId ? { ...c, paidBy: newPaidBy, notifiedBy: newNotifiedBy } : c
         ),
       });
+
+      // Notify the user that payment was confirmed
+      if (isPaid) {
+        get().sendPush({
+          userId: userId,
+          title: 'Pagamento Confirmado',
+          body: `Seu pagamento para "${charge.title}" foi confirmado pela tesouraria.`,
+          url: '/financial'
+        }).catch(() => {});
+      }
     } finally {
       set({ isLoading: false });
     }
@@ -1204,6 +1235,15 @@ export const useStore = create<AppState>()((set, get) => ({
           c.id === chargeId ? { ...c, notifiedBy: newNotifiedBy } : c
         ),
       });
+
+      // Notify Finance Team (targeted by role)
+      get().sendPush({
+        terreiroId: charge.terreiroId,
+        role: 'FINANCEIRO',
+        title: 'Novo Aviso de Pagamento',
+        body: `Um membro notificou o pagamento da cobrança: ${charge.title}`,
+        url: '/financial'
+      }).catch(() => {});
     } finally {
       set({ isLoading: false });
     }
