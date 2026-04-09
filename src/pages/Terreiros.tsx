@@ -90,7 +90,7 @@ export default function Terreiros() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 className="text-gradient" style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-            <Building2 size={28} /> {isAdmin ? 'Minhas Casas / Terreiros' : 'Minha Casa'}
+            <Building2 size={28} /> {isMaster ? 'Gerenciar Casas' : (isAdmin ? 'Minhas Casas' : 'Minha Casa')}
           </h2>
           {isAdmin && (
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.3rem' }}>

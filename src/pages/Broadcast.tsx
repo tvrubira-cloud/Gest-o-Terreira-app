@@ -61,7 +61,7 @@ export default function Broadcast() {
             <Megaphone size={28} color="var(--neon-purple)" />
           </div>
           <div>
-            <h1 className="text-gradient" style={{ fontSize: '2.5rem', marginBottom: '0.2rem' }}>Broadcast</h1>
+            <h1 className="text-gradient" style={{ fontSize: '2.5rem', marginBottom: '0.2rem' }}>Comunicados</h1>
             <p style={{ color: 'var(--text-muted)' }}>Envie notificações em massa para os membros.</p>
           </div>
         </div>

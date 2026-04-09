@@ -39,7 +39,7 @@ export default function Layout() {
     { id: 'members', path: '/members', icon: Users, label: isStaff ? 'Membros da Casa' : 'Meu Perfil', adminOnly: false },
     { id: 'events', path: '/events', icon: Calendar, label: 'Agenda e Eventos', adminOnly: false },
     { id: 'financial', path: '/financeiro', icon: DollarSign, label: 'Financeiro', adminOnly: false },
-    { id: 'broadcast', path: '/broadcast', icon: Megaphone, label: 'Broadcast', adminOnly: true },
+    { id: 'broadcast', path: '/broadcast', icon: Megaphone, label: 'Comunicados', adminOnly: true },
     { id: 'terreiros', path: '/terreiros', icon: Building2, label: 'Minhas Casas', adminOnly: true },
     { id: 'settings', path: '/settings', icon: Settings, label: 'Configurações', adminOnly: true },
   ];
@@ -211,10 +211,13 @@ export default function Layout() {
             }).map((item) => {
               // Now uses the outer 'role' and 'isMaster' and 'isStaff' variables defined at lines 29-32
               
-              // Dynamic label for members page
-              const label = item.id === 'members' 
-                ? (isStaff ? 'Membros da Casa' : 'Meu Perfil') 
-                : item.label;
+              // Dynamic label for members and terreiros pages
+              let label = item.label;
+              if (item.id === 'members') {
+                label = isStaff ? 'Membros da Casa' : 'Meu Perfil';
+              } else if (item.id === 'terreiros') {
+                label = isMaster ? 'Gerenciar Casas' : 'Minhas Casas';
+              }
 
               return (
                 <button
