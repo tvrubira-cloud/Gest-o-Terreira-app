@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import { Bell, BellOff, CheckCircle, RefreshCw, Settings } from 'lucide-react';
-import { getMessaging, isSupported } from 'firebase/messaging';
+import { isSupported } from 'firebase/messaging';
 import { getFCMToken } from '../lib/firebase';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
