@@ -160,10 +160,12 @@ export default function Settings() {
                 <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (!file || !currentTerreiro) return;
+                  e.target.value = '';
                   setIsUploadingLogo(true);
                   try {
                     const url = await uploadImage(file, `logos/terreiro-${currentTerreiro.id}.jpg`);
                     setLogoUrl(url);
+                    await updateTerreiro(currentTerreiro.id, { logoUrl: url });
                   } catch (err: any) {
                     alert(`Erro ao enviar logo: ${err.message}`);
                   } finally {
