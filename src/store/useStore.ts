@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseRead } from '../lib/supabase';
 
 export type Role = 'ADMIN' | 'FINANCEIRO' | 'SECRETARIA' | 'USER';
 
@@ -131,6 +131,17 @@ export interface Event {
   terreiroId: string;
 }
 
+export interface Broadcast {
+  id: string;
+  terreiroId?: string;
+  title: string;
+  body: string;
+  url?: string;
+  createdAt: string;
+  createdBy?: string;
+  isGlobal: boolean;
+}
+
 export type ChargeType = 'Mensalidade' | 'Colaboração' | 'Evento' | 'Outros';
 
 export interface Charge {
@@ -183,6 +194,7 @@ interface AppState {
   terreiros: Terreiro[];
   users: User[];
   events: Event[];
+  broadcasts: Broadcast[];
   charges: Charge[];
   bankAccounts: BankAccount[];
   currentUser: User | null;
@@ -198,6 +210,7 @@ interface AppState {
   getCurrentTerreiroSeguimento: () => { segmentoUmbanda: boolean; segmentoKimbanda: boolean; segmentoNacao: boolean };
   getFilteredUsers: () => User[];
   getFilteredEvents: () => Event[];
+  getFilteredBroadcasts: () => Broadcast[];
   getUserTerreiros: () => Terreiro[];
   getFilteredCharges: () => Charge[];
   getMyCharges: () => Charge[];
@@ -206,7 +219,7 @@ interface AppState {
   getBankAccountsForCurrentTerreiro: () => BankAccount[];
 
   // Actions
-  initializeData: () => Promise<void>;
+  initializeData: (forcedTerreiroId?: string) => Promise<void>;
   checkCpf: (cpf: string) => Promise<{ exists: boolean; hasPassword: boolean; userName?: string }>;
   setupPassword: (cpf: string, password: string, palavraChave?: string) => Promise<boolean>;
   recoverPassword: (cpf: string, palavraChave: string, novaSenha: string) => Promise<boolean>;
@@ -229,6 +242,10 @@ interface AppState {
   addEvent: (event: Omit<Event, 'id' | 'terreiroId'>) => Promise<void>;
   updateEvent: (id: string, eventData: Partial<Event>) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
+  fetchBroadcasts: () => Promise<void>;
+  subscribeToBroadcasts: () => () => void;
+  addBroadcast: (broadcast: Omit<Broadcast, 'id' | 'createdAt'>) => Promise<void>;
+  deleteBroadcast: (id: string) => Promise<void>;
   addCharge: (charge: Omit<Charge, 'id' | 'terreiroId' | 'createdAt'>) => Promise<void>;
   updateCharge: (id: string, data: Partial<Charge>) => Promise<void>;
   markChargeAsPaid: (chargeId: string, userId: string, isPaid: boolean) => Promise<void>;
@@ -300,6 +317,19 @@ function dbToEvent(row: any): Event {
   };
 }
 
+function dbToBroadcast(row: any): Broadcast {
+  return {
+    id: row.id,
+    terreiroId: row.terreiro_id,
+    title: row.title,
+    body: row.body,
+    url: row.url || '',
+    createdAt: row.created_at,
+    createdBy: row.created_by || '',
+    isGlobal: row.is_global || false,
+  };
+}
+
 function dbToCharge(row: any): Charge {
   return {
     id: row.id,
@@ -337,6 +367,7 @@ export const useStore = create<AppState>()((set, get) => ({
   terreiros: [],
   users: [],
   events: [],
+  broadcasts: [],
   charges: [],
   bankAccounts: [],
   currentUser: null,
@@ -349,10 +380,20 @@ export const useStore = create<AppState>()((set, get) => ({
   setMasterPixKey: (key) => set({ masterPixKey: key }),
 
   // ─── Initialize: fetch all data from Supabase ──────────
-  initializeData: async () => {
-    if (get().initialized) return;
+  initializeData: async (forcedTerreiroId?: string) => {
+    // Se já estiver inicializado e não houver um ID forçado, não faz nada
+    if (get().initialized && !forcedTerreiroId) return;
+    
     set({ isLoading: true });
     console.log('🔄 Iniciando carga de dados do Supabase...');
+    
+    // Obtém o ID do terreiro do estado ou do parâmetro
+    const terreiroId = forcedTerreiroId || get().currentTerreiroId;
+    const currentUser = get().currentUser;
+    const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
+    
+    // Sanitize terreiroId for the query
+    const validTerreiroId = (terreiroId && terreiroId !== 'undefined' && terreiroId !== 'null') ? terreiroId : null;
     
     try {
       // Timeout de 15 segundos para evitar travamento infinito
@@ -360,33 +401,59 @@ export const useStore = create<AppState>()((set, get) => ({
         setTimeout(() => reject(new Error('Timeout ao carregar dados do Supabase')), 15000)
       );
 
-      const fetchPromise = Promise.all([
-        supabase.from('terreiros').select('*'),
-        supabase.from('users').select('*'),
-        supabase.from('events').select('*'),
-        supabase.from('charges').select('*'),
-        supabase.from('bank_accounts').select('*'),
-      ]);
+      // Prepara as queries com isolamento de dados
+      // Usa supabaseRead (réplica de leitura quando configurada) para reduzir
+      // carga no banco primário e melhorar latência em múltiplas regiões.
+      const terreiroQuery  = supabaseRead.from('terreiros').select('*');
+      const usersQuery     = supabaseRead.from('users').select('*');
+      const eventsQuery    = supabaseRead.from('events').select('*');
+      const broadcastsQuery = supabaseRead.from('broadcasts').select('*').order('created_at', { ascending: false });
+      const chargesQuery   = supabaseRead.from('charges').select('*');
+      const bankQuery      = supabaseRead.from('bank_accounts').select('*');
 
-      const [terreiroRes, userRes, eventRes, chargeRes, bankRes] = await Promise.race([
-        fetchPromise,
+      // Aplica filtros se não for Master
+      if (!isMaster && validTerreiroId) {
+        terreiroQuery.eq('id', validTerreiroId);
+        usersQuery.eq('terreiro_id', validTerreiroId);
+        eventsQuery.eq('terreiro_id', validTerreiroId);
+        broadcastsQuery.or(`terreiro_id.eq.${validTerreiroId},is_global.eq.true`);
+        chargesQuery.eq('terreiro_id', validTerreiroId);
+        bankQuery.eq('terreiro_id', validTerreiroId);
+      } else if (!isMaster && !validTerreiroId) {
+        // Se não tiver terreiroId e não for master, carregar o mínimo possível ou nada
+        // Por segurança, se não estiver logado, não carregamos dados sensíveis em massa
+        usersQuery.limit(0);
+        eventsQuery.limit(0);
+        broadcastsQuery.eq('is_global', true); // Apenas globais se deslogado
+        chargesQuery.limit(0);
+        bankQuery.limit(0);
+      }
+
+      const [terreiroRes, userRes, eventRes, broadcastRes, chargeRes, bankRes] = await Promise.race([
+        Promise.all([
+          terreiroQuery,
+          usersQuery,
+          eventsQuery,
+          broadcastsQuery,
+          chargesQuery,
+          bankQuery,
+        ]),
         timeoutPromise
       ]) as any[];
 
-      console.log('✅ Dados carregados com sucesso');
+      console.log('✅ Dados carregados com sucesso' + (terreiroId ? ` para o terreiro ${terreiroId}` : ''));
 
       set({
         terreiros: (terreiroRes.data || []).map(dbToTerreiro),
         users: (userRes.data || []).map(dbToUser),
         events: (eventRes.data || []).map(dbToEvent),
+        broadcasts: (broadcastRes.data || []).map(dbToBroadcast),
         charges: (chargeRes.data || []).map(dbToCharge),
         bankAccounts: (bankRes.data || []).map(dbToBankAccount),
         initialized: true,
       });
     } catch (err: any) {
       console.error('❌ Erro ao carregar dados do Supabase:', err.message);
-      // Mesmo com erro, marcamos como inicializado para não travar o App.tsx se o erro for persistente
-      // mas mantemos os arrays vazios.
       set({ initialized: true });
     } finally {
       set({ isLoading: false });
@@ -442,6 +509,12 @@ export const useStore = create<AppState>()((set, get) => ({
     const { events, currentTerreiroId } = get();
     if (!currentTerreiroId) return [];
     return events.filter(e => e.terreiroId === currentTerreiroId);
+  },
+
+  getFilteredBroadcasts: () => {
+    const { broadcasts, currentTerreiroId } = get();
+    // Sempre retorna os globais + os específicos da casa atual
+    return broadcasts.filter(b => b.isGlobal || b.terreiroId === currentTerreiroId);
   },
 
   getUserTerreiros: () => {
@@ -583,6 +656,10 @@ export const useStore = create<AppState>()((set, get) => ({
       if (row && row.password && row.password === password) {
         const user = dbToUser(row);
         set({ currentUser: user, currentTerreiroId: user.terreiroId });
+        
+        // Reload data with the now-known terreiroId
+        await get().initializeData(user.terreiroId);
+
         // Save session in localStorage for persistence
         localStorage.setItem('terreiro-session', JSON.stringify({ userId: user.id, terreiroId: user.terreiroId }));
         return true;
@@ -1063,21 +1140,15 @@ export const useStore = create<AppState>()((set, get) => ({
   updateEvent: async (id, eventData) => {
     set({ isLoading: true });
     try {
-      const updateData: any = {};
-      if (eventData.title !== undefined) updateData.title = eventData.title;
-      if (eventData.date !== undefined) updateData.date = eventData.date;
-      if (eventData.description !== undefined) updateData.description = eventData.description;
+      await supabase.from('events').update({
+        title: eventData.title,
+        date: eventData.date,
+        description: eventData.description,
+      }).eq('id', id);
 
-      const { error } = await supabase
-        .from('events')
-        .update(updateData)
-        .eq('id', id);
-
-      if (!error) {
-        set({
-          events: get().events.map((e) => (e.id === id ? { ...e, ...eventData } : e)),
-        });
-      }
+      set({
+        events: get().events.map(e => e.id === id ? { ...e, ...eventData } : e),
+      });
     } finally {
       set({ isLoading: false });
     }
@@ -1086,16 +1157,112 @@ export const useStore = create<AppState>()((set, get) => ({
   deleteEvent: async (id) => {
     set({ isLoading: true });
     try {
-      const { error } = await supabase.from('events').delete().eq('id', id);
+      await supabase.from('events').delete().eq('id', id);
+      set({
+        events: get().events.filter(e => e.id !== id),
+      });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
 
-      if (!error) {
-        set({
-          events: get().events.filter((e) => e.id !== id),
-        });
+  fetchBroadcasts: async () => {
+    const { currentTerreiroId, currentUser } = get();
+    let query = supabaseRead.from('broadcasts').select('*');
+    
+    // Masters see ALL broadcasts. Others see their terreiro + global
+    const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
+    if (!isMaster) {
+      if (currentTerreiroId) {
+        query = query.or(`terreiro_id.eq.${currentTerreiroId},is_global.eq.true`);
+      } else {
+        query = query.eq('is_global', true);
+      }
+    }
+    
+    const { data, error } = await query.order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      set({ broadcasts: data.map(dbToBroadcast) });
+    }
+  },
+
+  subscribeToBroadcasts: () => {
+    const { currentTerreiroId, currentUser } = get();
+    const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
+
+    const channel = supabase
+      .channel('broadcasts-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'broadcasts' },
+        (payload) => {
+          const newBroadcast = dbToBroadcast(payload.new);
+          // Filtra: masters veem tudo; outros apenas globais ou do próprio terreiro
+          const isVisible =
+            isMaster ||
+            newBroadcast.isGlobal ||
+            newBroadcast.terreiroId === currentTerreiroId;
+
+          if (isVisible) {
+            set((state) => ({
+              broadcasts: [newBroadcast, ...state.broadcasts.filter(b => b.id !== newBroadcast.id)],
+            }));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
+
+  addBroadcast: async (broadcastData) => {
+    set({ isLoading: true });
+    try {
+      const { currentTerreiroId } = get();
+      const { data, error } = await supabase
+        .from('broadcasts')
+        .insert({
+          title: broadcastData.title,
+          body: broadcastData.body,
+          url: broadcastData.url || '',
+          is_global: broadcastData.isGlobal || false,
+          created_by: broadcastData.createdBy || '',
+          terreiro_id: broadcastData.isGlobal ? null : currentTerreiroId,
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        const newBroadcast = dbToBroadcast(data);
+        set({ broadcasts: [newBroadcast, ...get().broadcasts] });
+        // Enviar push para todos do terreiro se não for global
+        if (!broadcastData.isGlobal && currentTerreiroId) {
+          get().sendPushToTerreiro(
+            currentTerreiroId,
+            `📢 Comunicado: ${broadcastData.title}`,
+            broadcastData.body,
+            broadcastData.url || '/home'
+          ).catch(() => {});
+        } else if (broadcastData.isGlobal) {
+          // Push global opcional ou logica futura
+          console.log('Broadcast Global enviado');
+        }
       }
     } finally {
       set({ isLoading: false });
     }
+  },
+
+  deleteBroadcast: async (id) => {
+    const { error } = await supabase.from('broadcasts').delete().eq('id', id);
+    if (error) {
+      console.error('[deleteBroadcast] Erro ao excluir:', error);
+      throw new Error(error.message);
+    }
+    set(state => ({ broadcasts: state.broadcasts.filter(b => b.id !== id) }));
   },
 
   // ─── Push Notification Action ────────────────────────────

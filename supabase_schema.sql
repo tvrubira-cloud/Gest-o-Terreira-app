@@ -82,7 +82,23 @@ CREATE TABLE IF NOT EXISTS bank_accounts (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 6. Push Tokens (FCM)
+-- 6. Broadcasts (Comunicados)
+CREATE TABLE IF NOT EXISTS broadcasts (
+  id          TEXT PRIMARY KEY DEFAULT ('broadcast-' || gen_random_uuid()::text),
+  terreiro_id TEXT REFERENCES terreiros(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  body        TEXT NOT NULL,
+  url         TEXT DEFAULT '',
+  is_global   BOOLEAN DEFAULT false,
+  created_by  TEXT DEFAULT '',
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS broadcasts_terreiro_idx   ON broadcasts (terreiro_id);
+CREATE INDEX IF NOT EXISTS broadcasts_is_global_idx  ON broadcasts (is_global);
+CREATE INDEX IF NOT EXISTS broadcasts_created_at_idx ON broadcasts (created_at DESC);
+
+-- 7. Push Tokens (FCM)
 CREATE TABLE IF NOT EXISTS push_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -115,6 +131,7 @@ CREATE POLICY "Allow all for users"        ON users        FOR ALL USING (true) 
 CREATE POLICY "Allow all for events"       ON events       FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for charges"      ON charges      FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for bank_accounts" ON bank_accounts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for broadcasts"   ON broadcasts   FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for push_tokens"  ON push_tokens  FOR ALL USING (true) WITH CHECK (true);
 
 -- =============================================
