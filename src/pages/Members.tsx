@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useStore, defaultSpiritualData } from '../store/useStore';
 import type { User, SpiritualData } from '../store/useStore';
-import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2 } from 'lucide-react';
+import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2, UserCheck, UserX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { uploadImage } from '../utils/uploadImage';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -18,6 +18,7 @@ export default function Members() {
   const [view, setView] = useState<'LIST' | 'FORM'>('LIST');
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [activeTab, setActiveTab] = useState<'pessoal' | 'umbanda' | 'quimbanda' | 'nacao' | 'obrigacoes' | 'financeiro'>('pessoal');
   const [isSaving, setIsSaving] = useState(false);
@@ -129,10 +130,36 @@ export default function Members() {
     }
   };
 
-  const filteredUsers = users.filter(u => 
-    u.nomeCompleto.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (u.nomeDeSanto && u.nomeDeSanto.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const toggleFilter = (f: string) => {
+    setActiveFilters(prev => {
+      const next = new Set(prev);
+      next.has(f) ? next.delete(f) : next.add(f);
+      return next;
+    });
+  };
+
+  const filteredUsers = users.filter(u => {
+    // Busca textual
+    const term = searchTerm.toLowerCase();
+    if (term && !u.nomeCompleto.toLowerCase().includes(term) && !(u.nomeDeSanto?.toLowerCase().includes(term))) return false;
+
+    if (activeFilters.size === 0) return true;
+
+    // Filtros de status (ativo / inativo) — OR entre si
+    const statusFilters = ['ativo', 'inativo'].filter(f => activeFilters.has(f));
+    const matchesStatus = statusFilters.length === 0 ||
+      statusFilters.includes(u.spiritual?.situacaoCadastro ?? 'ativo');
+
+    // Filtros de seguimento (umbanda / kimbanda / nacao) — OR entre si
+    const tradFilters = ['umbanda', 'kimbanda', 'nacao'].filter(f => activeFilters.has(f));
+    const matchesTrad = tradFilters.length === 0 || (
+      (tradFilters.includes('umbanda')  && u.spiritual?.segmentoUmbanda) ||
+      (tradFilters.includes('kimbanda') && u.spiritual?.segmentoKimbanda) ||
+      (tradFilters.includes('nacao')    && u.spiritual?.segmentoNacao)
+    );
+
+    return matchesStatus && matchesTrad;
+  });
 
   const updateSpiritual = (field: keyof SpiritualData, value: any) => {
     if (!editingUser) return;
@@ -199,15 +226,63 @@ export default function Members() {
 
       {view === 'LIST' && isStaff && (
         <div className="panel glass-panel" style={{ padding: '1.5rem', borderRadius: 'var(--panel-radius)' }}>
-          <div className="search-bar" style={{ width: '100%', marginBottom: '1.5rem' }}>
+          {/* Barra de busca */}
+          <div className="search-bar" style={{ width: '100%' }}>
             <Search size={18} className="search-icon" />
-            <input 
-              type="text" 
-              placeholder="Buscar por nome civil ou de santo..." 
-              className="search-input" 
+            <input
+              type="text"
+              placeholder="Buscar por nome civil ou de santo..."
+              className="search-input"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
             />
+          </div>
+
+          {/* Chips de filtro */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: '0.25rem' }}>Filtrar:</span>
+
+            {([
+              { key: 'ativo',    label: 'Ativo',     color: '#00ff80' },
+              { key: 'inativo',  label: 'Inativo',   color: '#ff4c4c' },
+              { key: 'umbanda',  label: 'Umbanda',   color: '#00f0ff' },
+              { key: 'kimbanda', label: 'Quimbanda', color: '#9D4EDD' },
+              { key: 'nacao',    label: 'Nação',     color: '#ffd700' },
+            ] as const).map(({ key, label, color }) => {
+              const on = activeFilters.has(key);
+              return (
+                <button
+                  key={key}
+                  onClick={() => toggleFilter(key)}
+                  style={{
+                    padding: '0.3rem 0.9rem',
+                    borderRadius: 20,
+                    fontSize: '0.78rem',
+                    fontWeight: on ? 700 : 400,
+                    cursor: 'pointer',
+                    border: `1.5px solid ${on ? color : 'rgba(255,255,255,0.12)'}`,
+                    background: on ? `${color}22` : 'transparent',
+                    color: on ? color : 'var(--text-muted)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+
+            {activeFilters.size > 0 && (
+              <button
+                onClick={() => setActiveFilters(new Set())}
+                style={{ fontSize: '0.72rem', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: '0.2rem 0.4rem' }}
+              >
+                Limpar filtros
+              </button>
+            )}
+
+            <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              {filteredUsers.length} de {users.length} membros
+            </span>
           </div>
           
           <div style={{ overflowX: 'auto' }}>
@@ -259,19 +334,48 @@ export default function Members() {
                       </span>
                     </td>
                     <td style={{ padding: '1rem' }}>
-                      <div style={{ display: 'flex', gap: '0.8rem' }}>
-                        <button 
+                      <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                        {/* Editar */}
+                        <button
                           onClick={() => { setEditingUser(u); setView('FORM'); setActiveTab('pessoal'); }}
-                          className="icon-btn glow-fx" 
+                          className="icon-btn glow-fx"
                           style={{ background: 'rgba(0, 240, 255, 0.1)', border: '1px solid rgba(0, 240, 255, 0.2)', padding: '6px', borderRadius: '8px' }}
                           title="Editar"
                         >
                           <Edit2 size={16} color="var(--neon-cyan)" />
                         </button>
+
+                        {/* Toggle ativo / inativo */}
+                        {isStaff && u.id !== currentUser?.id && !u.isMaster && (() => {
+                          const isAtivo = (u.spiritual?.situacaoCadastro ?? 'ativo') === 'ativo';
+                          return (
+                            <button
+                              onClick={async () => {
+                                const novoStatus = isAtivo ? 'inativo' : 'ativo';
+                                await updateUser(u.id, {
+                                  ...u,
+                                  spiritual: { ...u.spiritual!, situacaoCadastro: novoStatus }
+                                });
+                              }}
+                              className="icon-btn"
+                              title={isAtivo ? 'Desativar membro' : 'Ativar membro'}
+                              style={{
+                                background: isAtivo ? 'rgba(0,255,128,0.08)' : 'rgba(255,76,76,0.08)',
+                                border: `1px solid ${isAtivo ? 'rgba(0,255,128,0.25)' : 'rgba(255,76,76,0.25)'}`,
+                                padding: '6px', borderRadius: '8px',
+                                color: isAtivo ? '#00ff80' : '#ff4c4c',
+                              }}
+                            >
+                              {isAtivo ? <UserCheck size={16} /> : <UserX size={16} />}
+                            </button>
+                          );
+                        })()}
+
+                        {/* Excluir */}
                         {isStaff && u.id !== currentUser?.id && !u.isMaster && (
-                          <button 
+                          <button
                             onClick={() => setDeleteModal({ isOpen: true, userId: u.id, userName: u.nomeCompleto })}
-                            className="icon-btn" 
+                            className="icon-btn"
                             style={{ background: 'rgba(255, 76, 76, 0.1)', border: '1px solid rgba(255, 76, 76, 0.2)', padding: '6px', borderRadius: '8px', color: '#ff4c4c' }}
                             title="Excluir"
                           >
