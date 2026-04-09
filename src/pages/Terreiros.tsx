@@ -4,7 +4,7 @@ import type { Terreiro } from '../store/useStore';
 import { Building2, Search, Edit2, Plus, ArrowLeft, Upload, X, Trash2, Lock, Unlock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { compressImage } from '../utils/image';
+import { uploadImage } from '../utils/uploadImage';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 export default function Terreiros() {
@@ -26,6 +26,7 @@ export default function Terreiros() {
   const [view, setView] = useState<'LIST' | 'FORM'>('LIST');
   const [editingTerreiro, setEditingTerreiro] = useState<Partial<Terreiro> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string; name: string }>({
     isOpen: false,
     id: '',
@@ -290,22 +291,28 @@ export default function Terreiros() {
                     )}
                   </div>
                   
-                  <label className="glass-panel glow-fx" style={{ padding: '0.8rem 1.2rem', cursor: 'pointer', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
-                    <Upload size={16} /> 
-                    {editingTerreiro.logoUrl ? 'Trocar Foto' : 'Selecionar Foto'}
-                    <input 
-                      type="file" 
-                      accept="image/*" 
+                  <label className="glass-panel glow-fx" style={{ padding: '0.8rem 1.2rem', cursor: isUploadingLogo ? 'wait' : 'pointer', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', opacity: isUploadingLogo ? 0.7 : 1 }}>
+                    <Upload size={16} />
+                    {isUploadingLogo ? 'Enviando...' : editingTerreiro.logoUrl ? 'Trocar Foto' : 'Selecionar Foto'}
+                    <input
+                      type="file"
+                      accept="image/*"
                       style={{ display: 'none' }}
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = async () => {
-                            const compressed = await compressImage(reader.result as string, 400, 400);
-                            setEditingTerreiro({ ...editingTerreiro, logoUrl: compressed });
-                          };
-                          reader.readAsDataURL(file);
+                        if (!file) return;
+                        e.target.value = '';
+                        setIsUploadingLogo(true);
+                        try {
+                          const path = editingTerreiro.id
+                            ? `logos/terreiro-${editingTerreiro.id}.jpg`
+                            : `logos/terreiro-new-${Date.now()}.jpg`;
+                          const url = await uploadImage(file, path);
+                          setEditingTerreiro({ ...editingTerreiro, logoUrl: url });
+                        } catch (err: any) {
+                          alert(`Erro ao enviar logo: ${err.message}`);
+                        } finally {
+                          setIsUploadingLogo(false);
                         }
                       }}
                     />
