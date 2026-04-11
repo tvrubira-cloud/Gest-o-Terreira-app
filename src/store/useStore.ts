@@ -45,7 +45,16 @@ export interface SpiritualData {
 
   // Cronograma
   obrigacoes: { data: string; descricao: string }[];
-  
+
+  // Isenção financeira
+  isencaoAtiva?: boolean;
+  isencaoTipo?: 'meses' | 'permanente';
+  isencaoMeses?: number;
+  isencaoDataInicio?: string;
+  isencaoDataFim?: string;
+  isencaoMotivo?: string;
+  isencaoConcedidaPor?: string;
+
   // Retro-compatibility fields
   orixaFrente?: string;
   tempoUmbanda?: string;

@@ -28,14 +28,77 @@ export default function Members() {
     userId: '',
     userName: ''
   });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkSegPanel, setBulkSegPanel] = useState(false);
+  const [bulkSegTipo, setBulkSegTipo] = useState<'umbanda' | 'quimbanda' | 'nacao' | ''>('');
+  const [bulkSegOrigem, setBulkSegOrigem] = useState('');
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+
+  // Membro pode editar o próprio cadastro livremente; staff edita qualquer um
+  const isOwnProfile = editingUser?.id === currentUser?.id;
+  const canEdit = isStaff || isOwnProfile;
+
+  // filteredUsers precisa estar antes dos helpers de seleção
+  const filteredUsers = users.filter(u => {
+    const term = searchTerm.toLowerCase();
+    if (term && !u.nomeCompleto.toLowerCase().includes(term) && !(u.nomeDeSanto?.toLowerCase().includes(term))) return false;
+    if (activeFilters.size === 0) return true;
+    const statusFilters = ['ativo', 'inativo'].filter(f => activeFilters.has(f));
+    const matchesStatus = statusFilters.length === 0 || statusFilters.includes(u.spiritual?.situacaoCadastro ?? 'ativo');
+    const tradFilters = ['umbanda', 'kimbanda', 'nacao'].filter(f => activeFilters.has(f));
+    const matchesTrad = tradFilters.length === 0 || (
+      (tradFilters.includes('umbanda')  && u.spiritual?.segmentoUmbanda) ||
+      (tradFilters.includes('kimbanda') && u.spiritual?.segmentoKimbanda) ||
+      (tradFilters.includes('nacao')    && u.spiritual?.segmentoNacao)
+    );
+    return matchesStatus && matchesTrad;
+  });
+
+  // ── Seleção em massa ──────────────────────────────────────
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const allVisibleSelected = filteredUsers.length > 0 && filteredUsers.every(u => selectedIds.has(u.id));
+  const toggleSelectAll = () =>
+    setSelectedIds(allVisibleSelected ? new Set() : new Set(filteredUsers.map(u => u.id)));
+
+  const clearSelection = () => { setSelectedIds(new Set()); setBulkSegPanel(false); setBulkSegTipo(''); setBulkSegOrigem(''); setBulkDeleteConfirm(false); };
+
+  const handleBulkStatus = async (status: 'ativo' | 'inativo') => {
+    const targets = users.filter(u => selectedIds.has(u.id));
+    await Promise.all(targets.map(u => updateUser(u.id, { ...u, spiritual: { ...u.spiritual!, situacaoCadastro: status } })));
+    clearSelection();
+  };
+
+  const handleBulkSegmento = async () => {
+    if (!bulkSegTipo) return;
+    const fieldMap = { umbanda: 'segmentoUmbanda', quimbanda: 'segmentoKimbanda', nacao: 'segmentoNacao' } as const;
+    const origemMap = { umbanda: 'umbandaOrigem', quimbanda: 'quimbandaOrigem', nacao: 'nacaoOrigem' } as const;
+    const segField = fieldMap[bulkSegTipo];
+    const origemField = origemMap[bulkSegTipo];
+    const targets = users.filter(u => selectedIds.has(u.id));
+    await Promise.all(targets.map(u => {
+      const spiritual: any = { ...u.spiritual!, [segField]: true };
+      if (bulkSegOrigem) spiritual[origemField] = bulkSegOrigem;
+      return updateUser(u.id, { ...u, spiritual });
+    }));
+    clearSelection();
+  };
+
+  const handleBulkDelete = async () => {
+    const targets = users.filter(u => selectedIds.has(u.id) && u.id !== currentUser?.id && !u.isMaster);
+    await Promise.all(targets.map(u => deleteUser(u.id)));
+    clearSelection();
+  };
 
   const getAvailableTabs = () => {
     const tabs: { id: 'pessoal' | 'umbanda' | 'quimbanda' | 'nacao' | 'obrigacoes' | 'financeiro'; label: string }[] = [
       { id: 'pessoal', label: 'Dados Pessoais' }
     ];
-    
-    // Verificamos se o usuário pode ver as abas espirituais (Apenas Staff)
-    if (isStaff) {
+
+    // Staff vê abas espirituais de qualquer membro; membro comum vê somente as próprias
+    const canSeeSpiritualTabs = isStaff || (editingUser?.id === currentUser?.id);
+    if (canSeeSpiritualTabs) {
       if (editingUser?.spiritual?.segmentoUmbanda) tabs.push({ id: 'umbanda', label: 'Umbanda' });
       if (editingUser?.spiritual?.segmentoKimbanda) tabs.push({ id: 'quimbanda', label: 'Quimbanda' });
       if (editingUser?.spiritual?.segmentoNacao) tabs.push({ id: 'nacao', label: 'Nação de Orixás' });
@@ -91,9 +154,9 @@ export default function Members() {
       } else {
         await addUser(editingUser as Omit<User, 'id' | 'createdAt' | 'terreiroId'>);
       }
-      
+
       alert("Dados salvos com sucesso!");
-      
+
       if (isAdmin) {
         setView('LIST');
       }
@@ -138,28 +201,6 @@ export default function Members() {
     });
   };
 
-  const filteredUsers = users.filter(u => {
-    // Busca textual
-    const term = searchTerm.toLowerCase();
-    if (term && !u.nomeCompleto.toLowerCase().includes(term) && !(u.nomeDeSanto?.toLowerCase().includes(term))) return false;
-
-    if (activeFilters.size === 0) return true;
-
-    // Filtros de status (ativo / inativo) — OR entre si
-    const statusFilters = ['ativo', 'inativo'].filter(f => activeFilters.has(f));
-    const matchesStatus = statusFilters.length === 0 ||
-      statusFilters.includes(u.spiritual?.situacaoCadastro ?? 'ativo');
-
-    // Filtros de seguimento (umbanda / kimbanda / nacao) — OR entre si
-    const tradFilters = ['umbanda', 'kimbanda', 'nacao'].filter(f => activeFilters.has(f));
-    const matchesTrad = tradFilters.length === 0 || (
-      (tradFilters.includes('umbanda')  && u.spiritual?.segmentoUmbanda) ||
-      (tradFilters.includes('kimbanda') && u.spiritual?.segmentoKimbanda) ||
-      (tradFilters.includes('nacao')    && u.spiritual?.segmentoNacao)
-    );
-
-    return matchesStatus && matchesTrad;
-  });
 
   const updateSpiritual = (field: keyof SpiritualData, value: any) => {
     if (!editingUser) return;
@@ -285,10 +326,112 @@ export default function Members() {
             </span>
           </div>
           
+          {/* ── Barra de ações em massa ── */}
+          {selectedIds.size > 0 && (
+            <div style={{ marginBottom: '0.8rem', padding: '0.8rem 1.2rem', background: 'rgba(0,240,255,0.06)', border: '1px solid rgba(0,240,255,0.2)', borderRadius: 10, display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'flex-start' }}>
+              <span style={{ color: 'var(--neon-cyan)', fontWeight: 700, fontSize: '0.85rem', alignSelf: 'center' }}>
+                {selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}
+              </span>
+
+              {/* Ativar */}
+              <button onClick={() => handleBulkStatus('ativo')} style={{ padding: '0.4rem 1rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(0,255,128,0.1)', border: '1px solid rgba(0,255,128,0.3)', color: '#00ff80' }}>
+                ✓ Ativar
+              </button>
+
+              {/* Inativar */}
+              <button onClick={() => handleBulkStatus('inativo')} style={{ padding: '0.4rem 1rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(255,76,76,0.1)', border: '1px solid rgba(255,76,76,0.3)', color: '#ff4c4c' }}>
+                ✗ Inativar
+              </button>
+
+              {/* Segmento */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <button
+                  onClick={() => { setBulkSegPanel(p => !p); setBulkSegTipo(''); setBulkSegOrigem(''); }}
+                  style={{ padding: '0.4rem 1rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', background: bulkSegPanel ? 'rgba(157,78,221,0.25)' : 'rgba(157,78,221,0.1)', border: '1px solid rgba(157,78,221,0.4)', color: '#b388ff' }}
+                >
+                  ⬡ Segmento{bulkSegPanel ? ' ▲' : ' ▼'}
+                </button>
+
+                {bulkSegPanel && (
+                  <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(157,78,221,0.3)', borderRadius: 10, display: 'flex', flexDirection: 'column', gap: '0.8rem', minWidth: 280 }}>
+                    {/* Tipo de segmento */}
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      {([
+                        { v: 'umbanda',   label: 'Umbanda',   color: '#00f0ff' },
+                        { v: 'quimbanda', label: 'Quimbanda', color: '#9D4EDD' },
+                        { v: 'nacao',     label: 'Nação',     color: '#ffd700' },
+                      ] as const).map(({ v, label, color }) => (
+                        <button key={v} onClick={() => { setBulkSegTipo(v); setBulkSegOrigem(''); }}
+                          style={{ padding: '0.35rem 0.8rem', borderRadius: 20, fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', border: `1.5px solid ${bulkSegTipo === v ? color : 'var(--glass-border)'}`, background: bulkSegTipo === v ? `${color}22` : 'transparent', color: bulkSegTipo === v ? color : 'var(--text-muted)', transition: 'all 0.2s' }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Origem do segmento */}
+                    {bulkSegTipo && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        <label style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Tradição de origem (opcional)</label>
+                        <select
+                          value={bulkSegOrigem}
+                          onChange={e => setBulkSegOrigem(e.target.value)}
+                          className="search-input glass-panel"
+                          style={{ padding: '0.5rem', border: '1px solid var(--glass-border)', color: 'var(--text-main)', background: 'var(--glass-bg)', fontSize: '0.82rem' }}
+                        >
+                          <option value="">— Não especificar —</option>
+                          {bulkSegTipo === 'umbanda' && ['Umbanda', 'Umbanda Almas e Angola', 'Omoloco', 'Umbanda Sagrada', 'Jurema'].map(o => <option key={o} value={o}>{o}</option>)}
+                          {bulkSegTipo === 'quimbanda' && ['Ganga Nagô (Kaballah)', 'Congo', 'Luciferiana', 'Malei'].map(o => <option key={o} value={o}>{o}</option>)}
+                          {bulkSegTipo === 'nacao' && ['Candomblé', 'Oyó e Jeje', 'Cabinda', 'Jeje e Ijexá', 'Oyó', 'Jeje', 'Nagô'].map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handleBulkSegmento}
+                      disabled={!bulkSegTipo}
+                      style={{ padding: '0.5rem 1.2rem', borderRadius: 8, fontSize: '0.82rem', fontWeight: 700, cursor: bulkSegTipo ? 'pointer' : 'not-allowed', background: bulkSegTipo ? 'linear-gradient(90deg,#00f0ff,#9D4EDD)' : 'rgba(255,255,255,0.05)', color: bulkSegTipo ? '#000' : 'var(--text-muted)', border: 'none' }}
+                    >
+                      Aplicar segmento aos selecionados
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Excluir em massa */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {!bulkDeleteConfirm ? (
+                  <button onClick={() => setBulkDeleteConfirm(true)} style={{ padding: '0.4rem 1rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(255,76,76,0.1)', border: '1px solid rgba(255,76,76,0.3)', color: '#ff4c4c' }}>
+                    🗑 Excluir selecionados
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#ff4c4c' }}>Confirmar exclusão?</span>
+                    <button onClick={handleBulkDelete} style={{ padding: '0.35rem 0.8rem', borderRadius: 8, fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(255,76,76,0.2)', border: '1px solid #ff4c4c', color: '#ff4c4c' }}>Sim</button>
+                    <button onClick={() => setBulkDeleteConfirm(false)} style={{ padding: '0.35rem 0.8rem', borderRadius: 8, fontSize: '0.78rem', cursor: 'pointer', background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>Não</button>
+                  </div>
+                )}
+              </div>
+
+              {/* Cancelar seleção */}
+              <button onClick={clearSelection} style={{ marginLeft: 'auto', padding: '0.4rem 0.8rem', borderRadius: 8, fontSize: '0.78rem', cursor: 'pointer', background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-muted)', alignSelf: 'flex-start' }}>
+                × Cancelar
+              </button>
+            </div>
+          )}
+
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--glass-border)', color: 'var(--text-muted)' }}>
+                  <th style={{ padding: '1.2rem', width: 40 }}>
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleSelectAll}
+                      title="Marcar todos"
+                      style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--neon-cyan)' }}
+                    />
+                  </th>
                   <th style={{ padding: '1.2rem' }}>Foto</th>
                   <th style={{ padding: '1.2rem' }}>CPF / Login</th>
                   <th style={{ padding: '1.2rem' }}>Nome Completo</th>
@@ -302,7 +445,15 @@ export default function Members() {
               </thead>
               <tbody>
                 {filteredUsers.map(u => (
-                  <tr key={u.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' }} className="hover-row">
+                  <tr key={u.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s', background: selectedIds.has(u.id) ? 'rgba(0,240,255,0.04)' : undefined }} className="hover-row">
+                    <td style={{ padding: '1rem', width: 40 }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(u.id)}
+                        onChange={() => toggleSelect(u.id)}
+                        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--neon-cyan)' }}
+                      />
+                    </td>
                     <td style={{ padding: '1rem' }}>
                       <div style={{ width: 42, height: 42, borderRadius: '50%', overflow: 'hidden', background: 'rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'center', alignItems: 'center', border: '2px solid var(--neon-cyan)', boxShadow: '0 0 10px rgba(0, 240, 255, 0.1)' }}>
                         {u.photoUrl ? (
@@ -382,7 +533,7 @@ export default function Members() {
                       <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
                         {/* Editar */}
                         <button
-                          onClick={() => { setEditingUser(u); setView('FORM'); setActiveTab('pessoal'); }}
+                          onClick={() => { setEditingUser({ ...u, spiritual: { ...defaultSpiritualData, ...(u.spiritual || {}) } }); setView('FORM'); setActiveTab('pessoal'); }}
                           className="icon-btn glow-fx"
                           style={{ background: 'rgba(0, 240, 255, 0.1)', border: '1px solid rgba(0, 240, 255, 0.2)', padding: '6px', borderRadius: '8px' }}
                           title="Editar"
@@ -524,9 +675,9 @@ export default function Members() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                       <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Segmentos</label>
                       <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
-                        <SegmentCheck active={!!editingUser.spiritual?.segmentoUmbanda} onClick={() => updateSpiritual('segmentoUmbanda', !editingUser.spiritual?.segmentoUmbanda)} label="Umbanda" disabled={!isStaff} />
-                        <SegmentCheck active={!!editingUser.spiritual?.segmentoKimbanda} onClick={() => updateSpiritual('segmentoKimbanda', !editingUser.spiritual?.segmentoKimbanda)} label="Quimbanda" disabled={!isStaff} />
-                        <SegmentCheck active={!!editingUser.spiritual?.segmentoNacao} onClick={() => updateSpiritual('segmentoNacao', !editingUser.spiritual?.segmentoNacao)} label="Nação" disabled={!isStaff} />
+                        <SegmentCheck active={!!editingUser.spiritual?.segmentoUmbanda} onClick={() => updateSpiritual('segmentoUmbanda', !editingUser.spiritual?.segmentoUmbanda)} label="Umbanda" disabled={!canEdit} />
+                        <SegmentCheck active={!!editingUser.spiritual?.segmentoKimbanda} onClick={() => updateSpiritual('segmentoKimbanda', !editingUser.spiritual?.segmentoKimbanda)} label="Quimbanda" disabled={!canEdit} />
+                        <SegmentCheck active={!!editingUser.spiritual?.segmentoNacao} onClick={() => updateSpiritual('segmentoNacao', !editingUser.spiritual?.segmentoNacao)} label="Nação" disabled={!canEdit} />
                       </div>
                     </div>
 
@@ -750,10 +901,26 @@ export default function Members() {
               {activeTab === 'financeiro' && (isAdmin || role === 'FINANCEIRO') && (
                 <motion.div key="financeiro" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
                   <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.8rem', marginBottom: '1.5rem', color: '#00ff88' }}>Controle Financeiro Individual</h3>
-                  <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: 12, border: '1px solid rgba(0, 255, 136, 0.2)' }}>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Aqui você pode visualizar o histórico de pagamentos e pendências deste membro.</p>
+
+                  {/* ── Isenção Financeira ── */}
+                  <h4 style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.8rem' }}>
+                    Isenção de Pagamento
+                  </h4>
+                  {editingUser.spiritual ? (
+                    <IsencaoPanel
+                      spiritual={editingUser.spiritual}
+                      membroNome={editingUser.nomeCompleto || ''}
+                      concedidoPor={currentUser?.nomeCompleto || currentUser?.cpf || ''}
+                      onChange={(updatedSpiritual) => setEditingUser(prev => prev ? { ...prev, spiritual: updatedSpiritual } : null)}
+                    />
+                  ) : (
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Carregando dados espirituais...</p>
+                  )}
+
+                  <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: 12, border: '1px solid rgba(0, 255, 136, 0.2)', marginTop: '1.5rem' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Histórico de pagamentos e pendências vinculado ao Financeiro Global.</p>
                     <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: 8, textAlign: 'center' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>Módulo de histórico detalhado em desenvolvimento ou vinculado ao Financeiro Global.</span>
+                      <span style={{ color: 'var(--text-muted)' }}>Módulo de histórico detalhado em desenvolvimento.</span>
                     </div>
                   </div>
                 </motion.div>
@@ -775,20 +942,20 @@ export default function Members() {
                 }} style={{ background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid var(--neon-cyan)', padding: '0.8rem 1.5rem', borderRadius: 8, cursor: 'pointer' }}>Próximo</button>}
               </div>
 
-              <button 
-                type="submit" 
-                disabled={isSaving}
-                className="glass-panel glow-fx" 
-                style={{ 
-                  padding: '0.8rem 2.5rem', 
-                  background: isSaving ? 'rgba(255,255,255,0.1)' : 'linear-gradient(90deg, #00f0ff, #9D4EDD)', 
-                  color: isSaving ? 'var(--text-muted)' : '#000', 
-                  fontSize: '1rem', 
-                  fontWeight: 900, 
-                  border: 'none', 
-                  borderRadius: 10, 
-                  cursor: isSaving ? 'not-allowed' : 'pointer', 
-                  boxShadow: isSaving ? 'none' : '0 0 20px rgba(0, 240, 255, 0.3)',
+              <button
+                type="submit"
+                disabled={isSaving || !canEdit}
+                className="glass-panel glow-fx"
+                style={{
+                  padding: '0.8rem 2.5rem',
+                  background: (isSaving || !canEdit) ? 'rgba(255,255,255,0.1)' : 'linear-gradient(90deg, #00f0ff, #9D4EDD)',
+                  color: (isSaving || !canEdit) ? 'var(--text-muted)' : '#000',
+                  fontSize: '1rem',
+                  fontWeight: 900,
+                  border: 'none',
+                  borderRadius: 10,
+                  cursor: (isSaving || !canEdit) ? 'not-allowed' : 'pointer',
+                  boxShadow: (isSaving || !canEdit) ? 'none' : '0 0 20px rgba(0, 240, 255, 0.3)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.5rem'
@@ -885,15 +1052,215 @@ function Input({ label, value, onChange, type = "text", required = false, readOn
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
       <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{label} {required && <span style={{ color: '#ff4c4c' }}>*</span>}</label>
-      <input 
-        type={type} 
+      <input
+        type={type}
         required={required}
         readOnly={readOnly}
-        className="search-input glass-panel" 
-        style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', color: readOnly ? 'var(--text-muted)' : 'var(--text-main)', opacity: readOnly ? 0.7 : 1, fontFamily: 'inherit', width: '100%' }} 
-        value={value || ''} 
-        onChange={e => onChange(e.target.value)} 
+        className="search-input glass-panel"
+        style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', color: readOnly ? 'var(--text-muted)' : 'var(--text-main)', opacity: readOnly ? 0.7 : 1, fontFamily: 'inherit', width: '100%' }}
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
       />
+    </div>
+  );
+}
+
+// ── Painel de Isenção Financeira ─────────────────────────────
+
+interface IsencaoPanelProps {
+  spiritual: SpiritualData;
+  membroNome: string;
+  concedidoPor: string;
+  onChange: (s: SpiritualData) => void;
+}
+
+function IsencaoPanel({ spiritual, membroNome, concedidoPor, onChange }: IsencaoPanelProps) {
+  const [editando, setEditando] = useState(false);
+  const [tipo, setTipo] = useState<'meses' | 'permanente'>(spiritual.isencaoTipo || 'meses');
+  const [meses, setMeses] = useState<number>(spiritual.isencaoMeses || 1);
+  const [motivo, setMotivo] = useState(spiritual.isencaoMotivo || '');
+
+  const isenta = !!spiritual.isencaoAtiva;
+
+  // Calcula se isenção por meses ainda é válida
+  const isencaoVencida = (() => {
+    if (!isenta || spiritual.isencaoTipo !== 'meses' || !spiritual.isencaoDataFim) return false;
+    return new Date(spiritual.isencaoDataFim) < new Date();
+  })();
+
+  const conceder = () => {
+    const dataInicio = new Date().toISOString().split('T')[0];
+    const dataFim = tipo === 'meses'
+      ? new Date(new Date().setMonth(new Date().getMonth() + meses)).toISOString().split('T')[0]
+      : undefined;
+    onChange({
+      ...spiritual,
+      isencaoAtiva: true,
+      isencaoTipo: tipo,
+      isencaoMeses: tipo === 'meses' ? meses : undefined,
+      isencaoDataInicio: dataInicio,
+      isencaoDataFim: dataFim,
+      isencaoMotivo: motivo || undefined,
+      isencaoConcedidaPor: concedidoPor,
+    });
+    setEditando(false);
+  };
+
+  const revogar = () => {
+    onChange({
+      ...spiritual,
+      isencaoAtiva: false,
+      isencaoTipo: undefined,
+      isencaoMeses: undefined,
+      isencaoDataInicio: undefined,
+      isencaoDataFim: undefined,
+      isencaoMotivo: undefined,
+      isencaoConcedidaPor: undefined,
+    });
+    setEditando(false);
+    setMotivo('');
+    setTipo('meses');
+    setMeses(1);
+  };
+
+  return (
+    <div style={{ borderRadius: 12, border: `1px solid ${isenta && !isencaoVencida ? 'rgba(0,255,128,0.3)' : 'rgba(255,255,255,0.1)'}`, overflow: 'hidden' }}>
+      {/* Cabeçalho do status */}
+      <div style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: isenta && !isencaoVencida ? 'rgba(0,255,128,0.06)' : 'rgba(255,255,255,0.02)', flexWrap: 'wrap', gap: '0.8rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+          <span style={{ fontSize: '1.4rem' }}>{isenta && !isencaoVencida ? '🟢' : '🔴'}</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '1rem', color: isenta && !isencaoVencida ? '#00ff80' : 'var(--text-muted)' }}>
+              {isenta && !isencaoVencida ? 'Membro Isento' : isencaoVencida ? 'Isenção Vencida' : 'Sem Isenção'}
+            </div>
+            {isenta && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                {spiritual.isencaoTipo === 'permanente'
+                  ? 'Isenção permanente'
+                  : `${spiritual.isencaoMeses} mes${spiritual.isencaoMeses !== 1 ? 'es' : ''} — válida até ${spiritual.isencaoDataFim ? new Date(spiritual.isencaoDataFim + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}`}
+                {spiritual.isencaoConcedidaPor && ` · concedida por ${spiritual.isencaoConcedidaPor}`}
+              </div>
+            )}
+            {isenta && spiritual.isencaoMotivo && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '0.1rem' }}>
+                Motivo: {spiritual.isencaoMotivo}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.6rem' }}>
+          {!isenta || isencaoVencida ? (
+            <button
+              type="button"
+              onClick={() => setEditando(e => !e)}
+              style={{ padding: '0.5rem 1.1rem', borderRadius: 8, fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(0,255,128,0.1)', border: '1px solid rgba(0,255,128,0.35)', color: '#00ff80' }}
+            >
+              {editando ? '▲ Fechar' : '+ Conceder Isenção'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={revogar}
+              style={{ padding: '0.5rem 1.1rem', borderRadius: 8, fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(255,76,76,0.1)', border: '1px solid rgba(255,76,76,0.35)', color: '#ff4c4c' }}
+            >
+              Revogar Isenção
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Formulário de concessão */}
+      {editando && (
+        <div style={{ padding: '1.5rem', borderTop: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '1.2rem', background: 'rgba(0,0,0,0.15)' }}>
+          {/* Tipo */}
+          <div>
+            <label style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: '0.5rem', display: 'block' }}>Tipo de isenção</label>
+            <div style={{ display: 'flex', gap: '0.8rem' }}>
+              {(['meses', 'permanente'] as const).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTipo(t)}
+                  style={{ padding: '0.5rem 1.2rem', borderRadius: 20, fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
+                    border: `1.5px solid ${tipo === t ? '#00ff80' : 'var(--glass-border)'}`,
+                    background: tipo === t ? 'rgba(0,255,128,0.12)' : 'transparent',
+                    color: tipo === t ? '#00ff80' : 'var(--text-muted)'
+                  }}
+                >
+                  {t === 'meses' ? 'Temporária (meses)' : 'Permanente'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Quantidade de meses */}
+          {tipo === 'meses' && (
+            <div>
+              <label style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: '0.5rem', display: 'block' }}>Quantidade de meses</label>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {[1, 2, 3, 6, 12, 24].map(m => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMeses(m)}
+                    style={{ width: 48, height: 40, borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
+                      border: `1.5px solid ${meses === m ? '#00f0ff' : 'var(--glass-border)'}`,
+                      background: meses === m ? 'rgba(0,240,255,0.12)' : 'transparent',
+                      color: meses === m ? 'var(--neon-cyan)' : 'var(--text-muted)'
+                    }}
+                  >
+                    {m}
+                  </button>
+                ))}
+                <input
+                  type="number"
+                  min={1}
+                  max={120}
+                  value={meses}
+                  onChange={e => setMeses(Math.max(1, Number(e.target.value)))}
+                  className="search-input glass-panel"
+                  style={{ width: 72, padding: '0.4rem 0.6rem', border: '1px solid var(--glass-border)', fontSize: '0.85rem', textAlign: 'center' }}
+                  placeholder="Outro"
+                />
+              </div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem', display: 'block' }}>
+                Válida até: {new Date(new Date().setMonth(new Date().getMonth() + meses)).toLocaleDateString('pt-BR')}
+              </span>
+            </div>
+          )}
+
+          {/* Motivo */}
+          <div>
+            <label style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: '0.5rem', display: 'block' }}>Motivo (opcional)</label>
+            <textarea
+              className="search-input glass-panel"
+              rows={2}
+              value={motivo}
+              onChange={e => setMotivo(e.target.value)}
+              placeholder={`Ex: Dificuldade financeira temporária de ${membroNome}...`}
+              style={{ width: '100%', padding: '0.7rem', border: '1px solid var(--glass-border)', resize: 'vertical' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.8rem' }}>
+            <button
+              type="button"
+              onClick={conceder}
+              style={{ padding: '0.6rem 1.5rem', borderRadius: 8, fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', background: 'linear-gradient(90deg,#00f0ff,#00ff80)', color: '#000', border: 'none' }}
+            >
+              Confirmar Isenção
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditando(false)}
+              style={{ padding: '0.6rem 1.2rem', borderRadius: 8, fontSize: '0.85rem', cursor: 'pointer', background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
