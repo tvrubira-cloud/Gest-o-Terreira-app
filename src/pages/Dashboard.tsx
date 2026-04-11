@@ -104,7 +104,7 @@ export default function Dashboard() {
                 <Users size={16} />
                 <h4 style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Membros</h4>
               </div>
-              <span className="stat-value text-gradient" style={{ fontSize: '2.5rem', fontWeight: 800 }}>{users.length}</span>
+              <span className="stat-value text-gradient" style={{ fontSize: '2.5rem', fontWeight: 800 }}>{users.filter(u => (u.spiritual?.situacaoCadastro ?? 'ativo') === 'ativo').length}</span>
             </div>
             <div className="stat-card" style={{ textAlign: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
