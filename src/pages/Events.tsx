@@ -1,7 +1,73 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { Calendar as CalendarIcon, Plus, Edit, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+function DateTimeInputField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const dtRef = useRef<HTMLInputElement>(null);
+
+  const toDisplay = (v: string) => {
+    if (!v) return '';
+    const [datePart, timePart = '00:00'] = v.split('T');
+    const [y, m, d] = datePart.split('-');
+    return `${d}/${m}/${y} ${timePart}`;
+  };
+
+  const [text, setText] = useState(() => toDisplay(value));
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 12);
+    let fmt = digits;
+    if (digits.length > 8) {
+      fmt = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)} ${digits.slice(8, 10)}:${digits.slice(10)}`;
+    } else if (digits.length > 4) {
+      fmt = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    } else if (digits.length > 2) {
+      fmt = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
+    setText(fmt);
+    if (digits.length === 12) {
+      const storage = `${digits.slice(4, 8)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}T${digits.slice(8, 10)}:${digits.slice(10)}`;
+      onChange(storage);
+    }
+  };
+
+  const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(e.target.value);
+    setText(toDisplay(e.target.value));
+  };
+
+  const openPicker = () => {
+    if (dtRef.current) {
+      try { dtRef.current.showPicker(); } catch { dtRef.current.click(); }
+    }
+  };
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <label style={{ color: 'var(--text-muted)' }}>Data e Hora</label>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <input
+          type="text"
+          required
+          placeholder="DD/MM/AAAA HH:MM"
+          className="search-input glass-panel"
+          style={{ padding: '0.8rem', paddingRight: '2.8rem', border: '1px solid var(--glass-border)', color: 'var(--text-main)', fontFamily: 'inherit', width: '100%' }}
+          value={text}
+          onChange={handleChange}
+        />
+        <button type="button" onClick={openPicker}
+          style={{ position: 'absolute', right: '0.6rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '0.2rem', display: 'flex', alignItems: 'center' }}>
+          <CalendarIcon size={16} />
+        </button>
+        <input ref={dtRef} type="datetime-local"
+          style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+          value={value} onChange={handlePickerChange}
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function Events() {
   const { addEvent, updateEvent, deleteEvent, currentUser, getFilteredEvents, getCurrentTerreiro, terreiros } = useStore();
@@ -102,10 +168,7 @@ export default function Events() {
                 <label style={{ color: 'var(--text-muted)' }}>Título</label>
                 <input required type="text" className="search-input glass-panel" style={{ padding: '0.8rem', border: '1px solid var(--glass-border)' }} value={title} onChange={e => setTitle(e.target.value)} />
               </div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ color: 'var(--text-muted)' }}>Data e Hora</label>
-                <input required type="datetime-local" className="search-input glass-panel" style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', color: 'var(--text-main)', fontFamily: 'inherit' }} value={date} onChange={e => setDate(e.target.value)} />
-              </div>
+              <DateTimeInputField value={date} onChange={setDate} />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <label style={{ color: 'var(--text-muted)' }}>Descrição (Opcional)</label>

@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useStore, defaultSpiritualData } from '../store/useStore';
 import type { User, SpiritualData } from '../store/useStore';
-import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2, UserCheck, UserX } from 'lucide-react';
+import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2, UserCheck, UserX, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { uploadImage } from '../utils/uploadImage';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -1048,7 +1048,85 @@ interface InputProps {
   readOnly?: boolean;
 }
 
+function DateInputField({ label, value, onChange, required = false, readOnly = false }: { label: string; value?: string | null; onChange: (v: string) => void; required?: boolean; readOnly?: boolean }) {
+  const dateRef = useRef<HTMLInputElement>(null);
+  const lastExternal = useRef(value);
+
+  const toDisplay = (v: string) => {
+    if (!v) return '';
+    const parts = v.split('-');
+    if (parts.length === 3 && parts[0].length === 4) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return '';
+  };
+
+  const [text, setText] = useState(() => toDisplay(value || ''));
+
+  useEffect(() => {
+    if (value !== lastExternal.current) {
+      lastExternal.current = value;
+      setText(toDisplay(value || ''));
+    }
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+    let fmt = digits;
+    if (digits.length > 4) fmt = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    else if (digits.length > 2) fmt = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    setText(fmt);
+    if (digits.length === 8) {
+      const storage = `${digits.slice(4)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`;
+      lastExternal.current = storage;
+      onChange(storage);
+    }
+  };
+
+  const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    lastExternal.current = v;
+    onChange(v);
+    setText(toDisplay(v));
+  };
+
+  const openPicker = () => {
+    if (dateRef.current) {
+      try { dateRef.current.showPicker(); } catch { dateRef.current.click(); }
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{label}{required && <span style={{ color: '#ff4c4c' }}> *</span>}</label>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <input
+          type="text"
+          placeholder="DD/MM/AAAA"
+          readOnly={readOnly}
+          required={required}
+          className="search-input glass-panel"
+          style={{ padding: '0.8rem', paddingRight: '2.8rem', border: '1px solid var(--glass-border)', color: readOnly ? 'var(--text-muted)' : 'var(--text-main)', opacity: readOnly ? 0.7 : 1, fontFamily: 'inherit', width: '100%' }}
+          value={text}
+          onChange={handleChange}
+        />
+        {!readOnly && (
+          <>
+            <button type="button" onClick={openPicker}
+              style={{ position: 'absolute', right: '0.6rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '0.2rem', display: 'flex', alignItems: 'center' }}>
+              <Calendar size={16} />
+            </button>
+            <input ref={dateRef} type="date"
+              style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+              value={value || ''} onChange={handlePickerChange}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Input({ label, value, onChange, type = "text", required = false, readOnly = false }: InputProps) {
+  if (type === 'date') return <DateInputField label={label} value={value} onChange={onChange} required={required} readOnly={readOnly} />;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
       <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{label} {required && <span style={{ color: '#ff4c4c' }}>*</span>}</label>
