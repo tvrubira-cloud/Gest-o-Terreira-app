@@ -448,30 +448,95 @@ export default function Financial() {
                                 </div>
                               )}
 
-                              {/* PIX — somente se pendente e tem chave */}
-                              {!isPaidByUser && !isNotifiedByUser && (charge.targetType === 'SYSTEM' ? masterPixKey : currentTerreiro?.pixKey) && (
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'rgba(0,240,255,0.05)', border: '1px solid rgba(0,240,255,0.2)', borderRadius: 10 }}>
-                                  <h4 style={{ color: 'var(--neon-cyan)', margin: 0 }}>Pagar via PIX</h4>
-                                  <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
-                                    Escaneie o QR Code com o app do seu banco para pagar {formatCurrency(charge.amount)}.
-                                  </p>
-                                  <div style={{ background: '#fff', padding: '1rem', borderRadius: '12px' }}>
-                                    <QRCodeSVG value={generatePixPayload(charge.targetType === 'SYSTEM' ? masterPixKey : (currentTerreiro?.pixKey || ''), currentTerreiro?.name || 'Recebedor', 'BRASIL', charge.id, charge.amount)} size={160} level="M" />
-                                  </div>
-                                  <button
-                                    onClick={() => { navigator.clipboard.writeText(generatePixPayload(charge.targetType === 'SYSTEM' ? masterPixKey : (currentTerreiro?.pixKey || ''), currentTerreiro?.name || 'Recebedor', 'BRASIL', charge.id, charge.amount)); alert('Código PIX copiado!'); }}
-                                    style={{ background: 'var(--neon-cyan)', border: 'none', color: '#000', padding: '0.8rem 1.5rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}>
-                                    <Copy size={18} /> PIX Copia e Cola
-                                  </button>
-                                </div>
-                              )}
+                              {/* Opções de pagamento — somente se pendente */}
+                              {!isPaidByUser && !isNotifiedByUser && (() => {
+                                // Cobrança SYSTEM: usa masterPixKey
+                                if (charge.targetType === 'SYSTEM') {
+                                  if (!masterPixKey) return (
+                                    <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: 10, fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                                      Pagamento presencial ou via transferência. Consulte o administrador.
+                                    </div>
+                                  );
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '1.2rem', background: 'rgba(0,240,255,0.05)', border: '1px solid rgba(0,240,255,0.2)', borderRadius: 10 }}>
+                                      <h4 style={{ color: 'var(--neon-cyan)', margin: 0 }}>Pagar via PIX</h4>
+                                      <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>Valor: <strong>{formatCurrency(charge.amount)}</strong></p>
+                                      <div style={{ background: '#fff', padding: '1rem', borderRadius: 12 }}>
+                                        <QRCodeSVG value={generatePixPayload(masterPixKey, 'ORUM Sistema', 'BRASIL', charge.id, charge.amount)} size={180} level="M" />
+                                      </div>
+                                      <button onClick={() => { navigator.clipboard.writeText(generatePixPayload(masterPixKey, 'ORUM Sistema', 'BRASIL', charge.id, charge.amount)); alert('Código PIX copiado!'); }}
+                                        style={{ background: 'var(--neon-cyan)', border: 'none', color: '#000', padding: '0.8rem 1.5rem', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}>
+                                        <Copy size={18} /> PIX Copia e Cola
+                                      </button>
+                                    </div>
+                                  );
+                                }
 
-                              {/* Sem PIX configurado — instrução */}
-                              {!isPaidByUser && !isNotifiedByUser && !(charge.targetType === 'SYSTEM' ? masterPixKey : currentTerreiro?.pixKey) && (
-                                <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: 10, fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                                  Pagamento presencial ou via transferência. Consulte o administrador da casa.
-                                </div>
-                              )}
+                                // Cobrança USER: usa contas bancárias do terreiro
+                                const terreiroAccounts = bankAccounts.filter(b => b.terreiroId === currentTerreiro?.id || b.terreiroId === currentUser?.terreiroId);
+                                const accountsWithPix = terreiroAccounts.filter(b => b.pixKey);
+
+                                // fallback: chave PIX direto no terreiro
+                                const fallbackPix = currentTerreiro?.pixKey;
+
+                                if (accountsWithPix.length === 0 && !fallbackPix) return (
+                                  <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: 10, fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                                    Nenhuma conta bancária com PIX cadastrada. Pagamento presencial ou via transferência — consulte o administrador.
+                                  </div>
+                                );
+
+                                // Monta lista de contas para exibir
+                                const pixSources: { label: string; pixKey: string; ownerName: string; bank?: string }[] = [];
+                                accountsWithPix.forEach(b => pixSources.push({ label: `${b.bankName} — Conta ${b.accountType}`, pixKey: b.pixKey!, ownerName: b.ownerName, bank: b.bankName }));
+                                if (fallbackPix && pixSources.length === 0) pixSources.push({ label: currentTerreiro?.name || 'Terreiro', pixKey: fallbackPix, ownerName: currentTerreiro?.name || '' });
+
+                                return (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <h4 style={{ color: 'var(--neon-cyan)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                      <Landmark size={18} /> Pagar via PIX — {formatCurrency(charge.amount)}
+                                    </h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
+                                      {pixSources.map((src, i) => (
+                                        <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.8rem', padding: '1.2rem', background: 'rgba(0,240,255,0.05)', border: '1px solid rgba(0,240,255,0.2)', borderRadius: 10 }}>
+                                          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                                            <strong style={{ color: '#fff', display: 'block', marginBottom: '0.2rem' }}>{src.label}</strong>
+                                            Titular: {src.ownerName}
+                                          </div>
+                                          <div style={{ background: '#fff', padding: '0.8rem', borderRadius: 10 }}>
+                                            <QRCodeSVG value={generatePixPayload(src.pixKey, src.ownerName, 'BRASIL', charge.id, charge.amount)} size={160} level="M" />
+                                          </div>
+                                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', wordBreak: 'break-all', textAlign: 'center' }}>
+                                            Chave: <strong style={{ color: '#00ff88' }}>{src.pixKey}</strong>
+                                          </div>
+                                          <button onClick={() => { navigator.clipboard.writeText(generatePixPayload(src.pixKey, src.ownerName, 'BRASIL', charge.id, charge.amount)); alert('Código PIX copiado!'); }}
+                                            style={{ background: 'var(--neon-cyan)', border: 'none', color: '#000', padding: '0.6rem 1.2rem', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', fontSize: '0.85rem', width: '100%', justifyContent: 'center' }}>
+                                            <Copy size={16} /> PIX Copia e Cola
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    {/* Dados bancários completos para TED/DOC */}
+                                    {terreiroAccounts.length > 0 && (
+                                      <div style={{ marginTop: '0.5rem' }}>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dados Bancários</div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                          {terreiroAccounts.map((b, i) => (
+                                            <div key={i} style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--glass-border)', fontSize: '0.85rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.3rem 1rem' }}>
+                                              <div><span style={{ color: 'var(--text-muted)' }}>Banco:</span> <strong>{b.bankName}</strong></div>
+                                              <div><span style={{ color: 'var(--text-muted)' }}>Tipo:</span> <strong>{b.accountType}</strong></div>
+                                              <div><span style={{ color: 'var(--text-muted)' }}>Agência:</span> <strong>{b.agency}</strong></div>
+                                              <div><span style={{ color: 'var(--text-muted)' }}>Conta:</span> <strong>{b.accountNumber}</strong></div>
+                                              <div style={{ gridColumn: '1 / -1' }}><span style={{ color: 'var(--text-muted)' }}>Titular:</span> <strong>{b.ownerName}</strong></div>
+                                              {b.pixKey && <div style={{ gridColumn: '1 / -1' }}><span style={{ color: 'var(--text-muted)' }}>Chave PIX:</span> <strong style={{ color: '#00ff88' }}>{b.pixKey}</strong></div>}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           )}
                         </div>
