@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import type { Charge, ChargeType, BankAccount } from '../store/useStore';
-import { DollarSign, Plus, ArrowLeft, CheckCircle, Clock, Users, Building2, AlertCircle, Landmark, Trash2, Copy, Calendar } from 'lucide-react';
+import { DollarSign, Plus, ArrowLeft, CheckCircle, Clock, Users, Building2, AlertCircle, Landmark, Trash2, Copy, Calendar, History, TrendingUp, TrendingDown, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { generatePixPayload } from '../utils/pix';
 
 export default function Financial() {
-  const { currentUser, getFilteredCharges, getMyCharges, getFilteredUsers, addCharge, markChargeAsPaid, notifyPayment, terreiros, getSystemChargesForCurrentTerreiro, getSystemChargesIssuedByMaster, getCurrentTerreiro, masterPixKey, getBankAccountsForCurrentTerreiro, addBankAccount, deleteBankAccount, bankAccounts: _storeBankAccounts } = useStore();
+  const { currentUser, getFilteredCharges, getMyCharges, getFilteredUsers, addCharge, deleteCharge, markChargeAsPaid, notifyPayment, terreiros, getSystemChargesForCurrentTerreiro, getSystemChargesIssuedByMaster, getCurrentTerreiro, masterPixKey, getBankAccountsForCurrentTerreiro, addBankAccount, deleteBankAccount, bankAccounts: _storeBankAccounts } = useStore();
   const currentTerreiro = getCurrentTerreiro();
   const role = currentUser?.role?.toUpperCase();
   const isAdmin = role === 'ADMIN';
@@ -15,8 +15,13 @@ export default function Financial() {
   const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
   const canManageFinancial = isAdmin || isFinanceiro || isMaster;
   
-  const [activeTab, setActiveTab] = useState<'HOUSE' | 'SYSTEM' | 'BANKS'>('HOUSE');
+  const [activeTab, setActiveTab] = useState<'HOUSE' | 'SYSTEM' | 'BANKS' | 'HISTORY'>('HOUSE');
   const [view, setView] = useState<'LIST' | 'FORM' | 'FORM_BANK'>('LIST');
+
+  // History state
+  const [historyFilter, setHistoryFilter] = useState<'ALL' | 'PAID' | 'PENDING' | 'OVERDUE'>('ALL');
+  const [historyPeriod, setHistoryPeriod] = useState<'ALL' | '30' | '90' | '365'>('ALL');
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   const houseCharges = canManageFinancial ? getFilteredCharges() : getMyCharges();
   const systemInvoices = isMaster ? getSystemChargesIssuedByMaster() : getSystemChargesForCurrentTerreiro();
@@ -112,29 +117,34 @@ export default function Financial() {
         
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           {canManageFinancial && view === 'LIST' && (
-            <div className="glass-panel" style={{ display: 'flex', padding: '0.3rem', borderRadius: 12, background: 'var(--hover-bg)' }}>
-              <button 
+            <div className="glass-panel" style={{ display: 'flex', padding: '0.3rem', borderRadius: 12, background: 'var(--hover-bg)', flexWrap: 'wrap', gap: '0.2rem' }}>
+              <button
                 onClick={() => setActiveTab('HOUSE')}
-                style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'HOUSE' ? 'var(--neon-cyan)' : 'transparent', color: activeTab === 'HOUSE' ? '#fff' : 'var(--text-main)', fontWeight: 'bold' }}>
+                style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'HOUSE' ? 'var(--neon-cyan)' : 'transparent', color: activeTab === 'HOUSE' ? '#000' : 'var(--text-main)', fontWeight: 'bold' }}>
                 Interno
               </button>
               {isMaster && (
-                <button 
+                <button
                   onClick={() => setActiveTab('SYSTEM')}
                   style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'SYSTEM' ? 'var(--neon-purple)' : 'transparent', color: activeTab === 'SYSTEM' ? '#fff' : 'var(--text-main)', fontWeight: 'bold' }}>
                   Sistema
                 </button>
               )}
-              <button 
+              <button
                 onClick={() => setActiveTab('BANKS')}
                 style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'BANKS' ? '#e2b714' : 'transparent', color: activeTab === 'BANKS' ? '#000' : 'var(--text-main)', fontWeight: 'bold' }}>
                 Bancos
               </button>
+              <button
+                onClick={() => { setActiveTab('HISTORY'); setSelectedMemberId(null); }}
+                style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'HISTORY' ? '#00ff88' : 'transparent', color: activeTab === 'HISTORY' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <History size={14} /> Histórico
+              </button>
             </div>
           )}
 
-          {canManageFinancial && view === 'LIST' && (
-            <button 
+          {canManageFinancial && view === 'LIST' && activeTab !== 'HISTORY' && (
+            <button
               onClick={() => {
                 if (activeTab === 'BANKS') {
                   setView('FORM_BANK');
@@ -290,6 +300,20 @@ export default function Financial() {
                         </div>
                         
                         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                          {canManageFinancial && (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm(`Excluir a cobrança "${charge.title}"?`)) {
+                                  await deleteCharge(charge.id);
+                                }
+                              }}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ff4c4c', padding: '0.3rem', display: 'flex', alignItems: 'center' }}
+                              title="Excluir cobrança"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                           {!isPaidByUser && !isNotifiedByUser && (charge.targetType === 'SYSTEM' ? masterPixKey : currentTerreiro?.pixKey) && (
                             <div 
                               onClick={(e) => {
@@ -394,6 +418,246 @@ export default function Financial() {
               </div>
             )}
           </div>
+        {/* ── HISTÓRICO ─────────────────────────────────── */}
+        {activeTab === 'HISTORY' && canManageFinancial && (() => {
+          const allHouseCharges = getFilteredCharges();
+          const today = new Date();
+
+          // Filtro de período
+          const periodFiltered = allHouseCharges.filter(c => {
+            if (historyPeriod === 'ALL') return true;
+            const days = parseInt(historyPeriod);
+            const diff = (today.getTime() - new Date(c.dueDate).getTime()) / (1000 * 60 * 60 * 24);
+            return diff <= days;
+          });
+
+          // Se tem membro selecionado — visão individual
+          if (selectedMemberId) {
+            const member = users.find(u => u.id === selectedMemberId);
+            const memberCharges = periodFiltered.filter(c => c.assignedTo.includes(selectedMemberId));
+            const paid = memberCharges.filter(c => c.paidBy.includes(selectedMemberId));
+            const notified = memberCharges.filter(c => !c.paidBy.includes(selectedMemberId) && (c.notifiedBy || []).includes(selectedMemberId));
+            const overdue = memberCharges.filter(c => !c.paidBy.includes(selectedMemberId) && new Date(c.dueDate) < today);
+            const pending = memberCharges.filter(c => !c.paidBy.includes(selectedMemberId));
+
+            const filtered = (() => {
+              if (historyFilter === 'PAID') return paid;
+              if (historyFilter === 'OVERDUE') return overdue;
+              if (historyFilter === 'PENDING') return pending;
+              return memberCharges;
+            })();
+
+            const totalPaid = paid.reduce((a, c) => a + c.amount, 0);
+            const totalPending = pending.reduce((a, c) => a + c.amount, 0);
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {/* Header membro */}
+                <div className="glass-panel" style={{ padding: '1.2rem 1.5rem', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderLeft: '3px solid var(--neon-cyan)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <button onClick={() => setSelectedMemberId(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <ArrowLeft size={18} />
+                    </button>
+                    <div>
+                      <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{member?.nomeCompleto}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{member?.nomeDeSanto || 'Sem nome de santo'}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '1.5rem', textAlign: 'right' }}>
+                    <div><div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total Pago</div><div style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(totalPaid)}</div></div>
+                    <div><div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Pendente</div><div style={{ color: '#ff4c4c', fontWeight: 'bold' }}>{formatCurrency(totalPending)}</div></div>
+                    <div><div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Cobranças</div><div style={{ fontWeight: 'bold' }}>{memberCharges.length}</div></div>
+                  </div>
+                </div>
+
+                {/* Filtros */}
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {(['ALL', 'PAID', 'PENDING', 'OVERDUE'] as const).map(f => (
+                    <button key={f} onClick={() => setHistoryFilter(f)}
+                      style={{ padding: '0.4rem 1rem', borderRadius: 20, border: `1px solid ${historyFilter === f ? 'var(--neon-cyan)' : 'var(--glass-border)'}`, background: historyFilter === f ? 'rgba(0,240,255,0.1)' : 'transparent', color: historyFilter === f ? 'var(--neon-cyan)' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      {f === 'ALL' ? 'Todas' : f === 'PAID' ? 'Pagas' : f === 'PENDING' ? 'Pendentes' : 'Atrasadas'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Lista de cobranças do membro */}
+                <div className="panel glass-panel" style={{ padding: '1.5rem', borderRadius: 'var(--panel-radius)' }}>
+                  {filtered.length === 0 ? (
+                    <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Nenhuma cobrança neste filtro.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      {filtered.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()).map(c => {
+                        const isPaid = c.paidBy.includes(selectedMemberId);
+                        const isNotif = (c.notifiedBy || []).includes(selectedMemberId);
+                        const isOver = !isPaid && new Date(c.dueDate) < today;
+                        const statusColor = isPaid ? '#00ff88' : isOver ? '#ff4c4c' : isNotif ? '#ffcc00' : 'var(--text-muted)';
+                        const statusLabel = isPaid ? 'Pago' : isNotif ? 'Notificado' : isOver ? 'Atrasado' : 'Pendente';
+                        return (
+                          <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem 1rem', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: `1px solid ${isPaid ? 'rgba(0,255,136,0.2)' : isOver ? 'rgba(255,76,76,0.2)' : 'rgba(255,255,255,0.05)'}` }}>
+                            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                              <div style={{ width: 10, height: 10, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+                              <div>
+                                <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{c.title}</div>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{c.type} • Venc. {new Date(c.dueDate).toLocaleDateString('pt-BR')}</div>
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontWeight: 'bold', color: statusColor }}>{statusLabel}</div>
+                              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{formatCurrency(c.amount)}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
+          // Visão global — resumo por membro
+          const memberSummaries = targetUsers.map(u => {
+            const assigned = periodFiltered.filter(c => c.assignedTo.includes(u.id));
+            const paid = assigned.filter(c => c.paidBy.includes(u.id));
+            const overdue = assigned.filter(c => !c.paidBy.includes(u.id) && new Date(c.dueDate) < today);
+            const pending = assigned.filter(c => !c.paidBy.includes(u.id));
+            const notified = assigned.filter(c => !c.paidBy.includes(u.id) && (c.notifiedBy || []).includes(u.id));
+            return {
+              user: u,
+              total: assigned.length,
+              paid: paid.length,
+              overdue: overdue.length,
+              pending: pending.length,
+              notified: notified.length,
+              totalPaid: paid.reduce((a, c) => a + c.amount, 0),
+              totalPending: pending.reduce((a, c) => a + c.amount, 0),
+              totalOverdue: overdue.reduce((a, c) => a + c.amount, 0),
+            };
+          }).filter(s => s.total > 0);
+
+          const filteredSummaries = (() => {
+            if (historyFilter === 'PAID') return memberSummaries.filter(s => s.paid > 0);
+            if (historyFilter === 'PENDING') return memberSummaries.filter(s => s.pending > 0);
+            if (historyFilter === 'OVERDUE') return memberSummaries.filter(s => s.overdue > 0);
+            return memberSummaries;
+          })();
+
+          // Totais globais
+          const globalPaid = memberSummaries.reduce((a, s) => a + s.totalPaid, 0);
+          const globalPending = memberSummaries.reduce((a, s) => a + s.totalPending, 0);
+          const globalOverdue = memberSummaries.reduce((a, s) => a + s.totalOverdue, 0);
+          const membersOk = memberSummaries.filter(s => s.pending === 0 && s.total > 0).length;
+          const membersOverdue = memberSummaries.filter(s => s.overdue > 0).length;
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+              {/* Cards resumo global */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
+                <div className="panel glass-panel" style={{ padding: '1.2rem', borderRadius: 12, borderLeft: '3px solid #00ff88' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><TrendingUp size={14} /> Total Arrecadado</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#00ff88', marginTop: '0.3rem' }}>{formatCurrency(globalPaid)}</div>
+                </div>
+                <div className="panel glass-panel" style={{ padding: '1.2rem', borderRadius: 12, borderLeft: '3px solid #ff4c4c' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><TrendingDown size={14} /> Total Pendente</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#ff4c4c', marginTop: '0.3rem' }}>{formatCurrency(globalPending)}</div>
+                </div>
+                <div className="panel glass-panel" style={{ padding: '1.2rem', borderRadius: 12, borderLeft: '3px solid #ffcc00' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Em Atraso</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#ffcc00', marginTop: '0.3rem' }}>{formatCurrency(globalOverdue)}</div>
+                </div>
+                <div className="panel glass-panel" style={{ padding: '1.2rem', borderRadius: 12, borderLeft: '3px solid var(--neon-cyan)' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Em Dia / Inadimplentes</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', marginTop: '0.3rem' }}>
+                    <span style={{ color: '#00ff88' }}>{membersOk}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '1rem' }}> / </span>
+                    <span style={{ color: '#ff4c4c' }}>{membersOverdue}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filtros */}
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <Filter size={14} style={{ color: 'var(--text-muted)' }} />
+                {(['ALL', 'PAID', 'PENDING', 'OVERDUE'] as const).map(f => (
+                  <button key={f} onClick={() => setHistoryFilter(f)}
+                    style={{ padding: '0.4rem 1rem', borderRadius: 20, border: `1px solid ${historyFilter === f ? 'var(--neon-cyan)' : 'var(--glass-border)'}`, background: historyFilter === f ? 'rgba(0,240,255,0.1)' : 'transparent', color: historyFilter === f ? 'var(--neon-cyan)' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem' }}>
+                    {f === 'ALL' ? 'Todos' : f === 'PAID' ? 'Em Dia' : f === 'PENDING' ? 'Com Pendência' : 'Atrasados'}
+                  </button>
+                ))}
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Calendar size={14} style={{ color: 'var(--text-muted)' }} />
+                  <select value={historyPeriod} onChange={e => setHistoryPeriod(e.target.value as typeof historyPeriod)}
+                    className="search-input glass-panel"
+                    style={{ padding: '0.4rem 0.8rem', border: '1px solid var(--glass-border)', color: 'var(--text-main)', fontSize: '0.85rem', borderRadius: 8 }}>
+                    <option value="ALL">Todo período</option>
+                    <option value="30">Últimos 30 dias</option>
+                    <option value="90">Últimos 90 dias</option>
+                    <option value="365">Último ano</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Tabela de membros */}
+              <div className="panel glass-panel" style={{ padding: '1.5rem', borderRadius: 'var(--panel-radius)' }}>
+                <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <History size={18} /> Histórico por Membro
+                </h3>
+                {filteredSummaries.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Nenhum dado encontrado para este filtro.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    {filteredSummaries.sort((a, b) => b.totalOverdue - a.totalOverdue || b.totalPending - a.totalPending).map(s => {
+                      const pctPaid = s.total > 0 ? Math.round((s.paid / s.total) * 100) : 0;
+                      const statusColor = s.overdue > 0 ? '#ff4c4c' : s.pending > 0 ? '#ffcc00' : '#00ff88';
+                      return (
+                        <div key={s.user.id}
+                          onClick={() => setSelectedMemberId(s.user.id)}
+                          style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto', alignItems: 'center', gap: '1rem', padding: '0.8rem 1rem', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: `1px solid ${s.overdue > 0 ? 'rgba(255,76,76,0.25)' : s.pending === 0 ? 'rgba(0,255,136,0.15)' : 'rgba(255,255,255,0.05)'}`, cursor: 'pointer', transition: 'background 0.15s' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}>
+
+                          {/* Nome */}
+                          <div>
+                            <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{s.user.nomeCompleto}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{s.user.nomeDeSanto || '—'} • {s.total} cobrança(s)</div>
+                            {/* Barra de progresso */}
+                            <div style={{ marginTop: '0.4rem', height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.1)', overflow: 'hidden', width: '100%', maxWidth: 200 }}>
+                              <div style={{ height: '100%', width: `${pctPaid}%`, background: statusColor, borderRadius: 2, transition: 'width 0.4s' }} />
+                            </div>
+                          </div>
+
+                          {/* Pago */}
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Pago</div>
+                            <div style={{ color: '#00ff88', fontWeight: 'bold', fontSize: '0.9rem' }}>{formatCurrency(s.totalPaid)}</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{s.paid}/{s.total}</div>
+                          </div>
+
+                          {/* Pendente */}
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Pendente</div>
+                            <div style={{ color: s.pending > 0 ? '#ffcc00' : 'var(--text-muted)', fontWeight: 'bold', fontSize: '0.9rem' }}>{formatCurrency(s.totalPending)}</div>
+                            {s.notified > 0 && <div style={{ fontSize: '0.7rem', color: '#ffcc00' }}>{s.notified} notif.</div>}
+                          </div>
+
+                          {/* Atrasado */}
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Atrasado</div>
+                            <div style={{ color: s.overdue > 0 ? '#ff4c4c' : 'var(--text-muted)', fontWeight: 'bold', fontSize: '0.9rem' }}>{s.overdue > 0 ? formatCurrency(s.totalOverdue) : '—'}</div>
+                          </div>
+
+                          {/* Seta */}
+                          <ChevronDown size={16} style={{ color: 'var(--text-muted)' }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
         </div>
       )}
 
