@@ -257,6 +257,7 @@ interface AppState {
   deleteBroadcast: (id: string) => Promise<void>;
   addCharge: (charge: Omit<Charge, 'id' | 'terreiroId' | 'createdAt'>) => Promise<void>;
   updateCharge: (id: string, data: Partial<Charge>) => Promise<void>;
+  deleteCharge: (id: string) => Promise<void>;
   markChargeAsPaid: (chargeId: string, userId: string, isPaid: boolean) => Promise<void>;
   notifyPayment: (chargeId: string, userId: string) => Promise<void>;
   addBankAccount: (account: Omit<BankAccount, 'id' | 'terreiroId'>) => Promise<void>;
@@ -413,12 +414,14 @@ export const useStore = create<AppState>()((set, get) => ({
       // Prepara as queries com isolamento de dados
       // Usa supabaseRead (réplica de leitura quando configurada) para reduzir
       // carga no banco primário e melhorar latência em múltiplas regiões.
-      const terreiroQuery  = supabaseRead.from('terreiros').select('*');
-      const usersQuery     = supabaseRead.from('users').select('*');
-      const eventsQuery    = supabaseRead.from('events').select('*');
+      const terreiroQuery   = supabaseRead.from('terreiros').select('*');
+      const usersQuery      = supabaseRead.from('users').select('*');
+      const eventsQuery     = supabaseRead.from('events').select('*');
       const broadcastsQuery = supabaseRead.from('broadcasts').select('*').order('created_at', { ascending: false });
-      const chargesQuery   = supabaseRead.from('charges').select('*');
-      const bankQuery      = supabaseRead.from('bank_accounts').select('*');
+      // Duas queries separadas para cobranças: internas do terreiro + SYSTEM atribuídas a este terreiro
+      const chargesUserQuery   = supabaseRead.from('charges').select('*');
+      const chargesSystemQuery = supabaseRead.from('charges').select('*');
+      const bankQuery          = supabaseRead.from('bank_accounts').select('*');
 
       // Aplica filtros se não for Master
       if (!isMaster && validTerreiroId) {
@@ -426,29 +429,41 @@ export const useStore = create<AppState>()((set, get) => ({
         usersQuery.eq('terreiro_id', validTerreiroId);
         eventsQuery.eq('terreiro_id', validTerreiroId);
         broadcastsQuery.or(`terreiro_id.eq.${validTerreiroId},is_global.eq.true`);
-        chargesQuery.eq('terreiro_id', validTerreiroId);
+        // Cobranças internas: mesma terreiro_id
+        chargesUserQuery.eq('terreiro_id', validTerreiroId);
+        // Cobranças SYSTEM onde este terreiro está em assigned_to
+        chargesSystemQuery
+          .eq('target_type', 'SYSTEM')
+          .contains('assigned_to', [validTerreiroId]);
         bankQuery.eq('terreiro_id', validTerreiroId);
       } else if (!isMaster && !validTerreiroId) {
-        // Se não tiver terreiroId e não for master, carregar o mínimo possível ou nada
-        // Por segurança, se não estiver logado, não carregamos dados sensíveis em massa
         usersQuery.limit(0);
         eventsQuery.limit(0);
-        broadcastsQuery.eq('is_global', true); // Apenas globais se deslogado
-        chargesQuery.limit(0);
+        broadcastsQuery.eq('is_global', true);
+        chargesUserQuery.limit(0);
+        chargesSystemQuery.limit(0);
         bankQuery.limit(0);
+      } else {
+        // Master: carrega tudo, sem necessidade da query SYSTEM separada
+        chargesSystemQuery.limit(0);
       }
 
-      const [terreiroRes, userRes, eventRes, broadcastRes, chargeRes, bankRes] = await Promise.race([
+      const [terreiroRes, userRes, eventRes, broadcastRes, chargeUserRes, chargeSystemRes, bankRes] = await Promise.race([
         Promise.all([
           terreiroQuery,
           usersQuery,
           eventsQuery,
           broadcastsQuery,
-          chargesQuery,
+          chargesUserQuery,
+          chargesSystemQuery,
           bankQuery,
         ]),
         timeoutPromise
       ]) as any[];
+
+      // Mescla cobranças internas + SYSTEM, removendo duplicatas pelo id
+      const allChargesRaw = [...(chargeUserRes.data || []), ...(chargeSystemRes.data || [])];
+      const uniqueChargesRaw = allChargesRaw.filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i);
 
       console.log('✅ Dados carregados com sucesso' + (terreiroId ? ` para o terreiro ${terreiroId}` : ''));
 
@@ -457,7 +472,7 @@ export const useStore = create<AppState>()((set, get) => ({
         users: (userRes.data || []).map(dbToUser),
         events: (eventRes.data || []).map(dbToEvent),
         broadcasts: (broadcastRes.data || []).map(dbToBroadcast),
-        charges: (chargeRes.data || []).map(dbToCharge),
+        charges: uniqueChargesRaw.map(dbToCharge),
         bankAccounts: (bankRes.data || []).map(dbToBankAccount),
         initialized: true,
       });
@@ -1420,6 +1435,16 @@ export const useStore = create<AppState>()((set, get) => ({
         body: `Um membro notificou o pagamento da cobrança: ${charge.title}`,
         url: '/financial'
       }).catch(() => {});
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  deleteCharge: async (id) => {
+    set({ isLoading: true });
+    try {
+      await supabase.from('charges').delete().eq('id', id);
+      set({ charges: get().charges.filter(c => c.id !== id) });
     } finally {
       set({ isLoading: false });
     }
