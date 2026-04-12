@@ -395,20 +395,84 @@ export default function Financial() {
                               </div>
                             </>
                           ) : (
-                            (!isPaidByUser && !isNotifiedByUser && (charge.targetType === 'SYSTEM' ? masterPixKey : currentTerreiro?.pixKey)) && (
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '1rem' }}>
-                                <h4 style={{ color: 'var(--neon-cyan)', margin: 0 }}>Pagamento via PIX</h4>
-                                <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>Escaneie o QR Code abaixo com o app do seu banco para pagar o valor de {formatCurrency(charge.amount)}.</p>
-                                <div style={{ background: '#fff', padding: '1rem', borderRadius: '12px' }}>
-                                  <QRCodeSVG value={generatePixPayload(charge.targetType === 'SYSTEM' ? masterPixKey : (currentTerreiro?.pixKey || ''), currentTerreiro?.name || 'Recebedor', 'BRASIL', charge.id, charge.amount)} size={160} level="M" />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', padding: '0.5rem' }}>
+
+                              {/* Detalhes da cobrança */}
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '0.8rem' }}>
+                                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.8rem', borderRadius: 8 }}>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Tipo</div>
+                                  <div style={{ fontWeight: 'bold' }}>{charge.type}</div>
                                 </div>
-                                <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                                  <button onClick={() => { navigator.clipboard.writeText(generatePixPayload(charge.targetType === 'SYSTEM' ? masterPixKey : (currentTerreiro?.pixKey || ''), currentTerreiro?.name || 'Recebedor', 'BRASIL', charge.id, charge.amount)); alert('BR Code PIX Copiado!'); }} style={{ background: 'var(--neon-cyan)', border: 'none', color: '#000', padding: '0.8rem 1.5rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}>
+                                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.8rem', borderRadius: 8 }}>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Valor</div>
+                                  <div style={{ fontWeight: 'bold', color: 'var(--neon-cyan)' }}>{formatCurrency(charge.amount)}</div>
+                                </div>
+                                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.8rem', borderRadius: 8 }}>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Vencimento</div>
+                                  <div style={{ fontWeight: 'bold', color: new Date(charge.dueDate) < new Date() && !isPaidByUser ? '#ff4c4c' : 'var(--text-main)' }}>
+                                    {new Date(charge.dueDate).toLocaleDateString('pt-BR')}
+                                  </div>
+                                </div>
+                                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.8rem', borderRadius: 8 }}>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Situação</div>
+                                  <div style={{ fontWeight: 'bold', color: isPaidByUser ? '#00ff88' : isNotifiedByUser ? '#ffcc00' : '#ff4c4c' }}>
+                                    {isPaidByUser ? 'Pago / Confirmado' : isNotifiedByUser ? 'Aguardando Confirmação' : 'Pendente'}
+                                  </div>
+                                </div>
+                                {charge.description && (
+                                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.8rem', borderRadius: 8, gridColumn: '1 / -1' }}>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Descrição</div>
+                                    <div style={{ fontSize: '0.9rem' }}>{charge.description}</div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Status visual */}
+                              {isPaidByUser && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '1rem', background: 'rgba(0,255,136,0.08)', border: '1px solid rgba(0,255,136,0.3)', borderRadius: 10 }}>
+                                  <CheckCircle size={24} color="#00ff88" />
+                                  <div>
+                                    <div style={{ fontWeight: 'bold', color: '#00ff88' }}>Pagamento Confirmado</div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Seu pagamento foi registrado pelo administrador.</div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {isNotifiedByUser && !isPaidByUser && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '1rem', background: 'rgba(255,204,0,0.08)', border: '1px solid rgba(255,204,0,0.3)', borderRadius: 10 }}>
+                                  <Clock size={24} color="#ffcc00" />
+                                  <div>
+                                    <div style={{ fontWeight: 'bold', color: '#ffcc00' }}>Pagamento Notificado</div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Aguardando confirmação do administrador.</div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* PIX — somente se pendente e tem chave */}
+                              {!isPaidByUser && !isNotifiedByUser && (charge.targetType === 'SYSTEM' ? masterPixKey : currentTerreiro?.pixKey) && (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'rgba(0,240,255,0.05)', border: '1px solid rgba(0,240,255,0.2)', borderRadius: 10 }}>
+                                  <h4 style={{ color: 'var(--neon-cyan)', margin: 0 }}>Pagar via PIX</h4>
+                                  <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
+                                    Escaneie o QR Code com o app do seu banco para pagar {formatCurrency(charge.amount)}.
+                                  </p>
+                                  <div style={{ background: '#fff', padding: '1rem', borderRadius: '12px' }}>
+                                    <QRCodeSVG value={generatePixPayload(charge.targetType === 'SYSTEM' ? masterPixKey : (currentTerreiro?.pixKey || ''), currentTerreiro?.name || 'Recebedor', 'BRASIL', charge.id, charge.amount)} size={160} level="M" />
+                                  </div>
+                                  <button
+                                    onClick={() => { navigator.clipboard.writeText(generatePixPayload(charge.targetType === 'SYSTEM' ? masterPixKey : (currentTerreiro?.pixKey || ''), currentTerreiro?.name || 'Recebedor', 'BRASIL', charge.id, charge.amount)); alert('Código PIX copiado!'); }}
+                                    style={{ background: 'var(--neon-cyan)', border: 'none', color: '#000', padding: '0.8rem 1.5rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}>
                                     <Copy size={18} /> PIX Copia e Cola
                                   </button>
                                 </div>
-                              </div>
-                            )
+                              )}
+
+                              {/* Sem PIX configurado — instrução */}
+                              {!isPaidByUser && !isNotifiedByUser && !(charge.targetType === 'SYSTEM' ? masterPixKey : currentTerreiro?.pixKey) && (
+                                <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: 10, fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                                  Pagamento presencial ou via transferência. Consulte o administrador da casa.
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}
