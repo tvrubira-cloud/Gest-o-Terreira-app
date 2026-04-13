@@ -754,8 +754,8 @@ export default function Members() {
                         )}
                       </div>
                     </div>
-                    <Input label="Obrigação de Cabeça" value={editingUser.spiritual?.umbandaObrigaCabeca} onChange={(v) => updateSpiritual('umbandaObrigaCabeca', v)} />
-                    <Input label="Obrigação de Corpo" value={editingUser.spiritual?.umbandaObrigaCorpo} onChange={(v) => updateSpiritual('umbandaObrigaCorpo', v)} />
+                    <Input label="Entidade de Cabeça / Pai / Mãe" value={editingUser.spiritual?.umbandaObrigaCabeca} onChange={(v) => updateSpiritual('umbandaObrigaCabeca', v)} />
+                    <Input label="Entidade de Corpo / Pai / Mãe" value={editingUser.spiritual?.umbandaObrigaCorpo} onChange={(v) => updateSpiritual('umbandaObrigaCorpo', v)} />
                     
                     <div style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
                       <h4 style={{ color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.9rem', textTransform: 'uppercase' }}>Obrigações Anteriores</h4>
@@ -871,8 +871,8 @@ export default function Members() {
                         )}
                       </div>
                     </div>
-                    <Input label="Obrigação de Cabeça" value={editingUser.spiritual?.nacaoObrigaCabeca} onChange={(v) => updateSpiritual('nacaoObrigaCabeca', v)} />
-                    <Input label="Obrigação de Corpo" value={editingUser.spiritual?.nacaoObrigaCorpo} onChange={(v) => updateSpiritual('nacaoObrigaCorpo', v)} />
+                    <Input label="Entidade de Cabeça / Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCabeca} onChange={(v) => updateSpiritual('nacaoObrigaCabeca', v)} />
+                    <Input label="Entidade de Corpo / Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCorpo} onChange={(v) => updateSpiritual('nacaoObrigaCorpo', v)} />
                     <Input label="Obrigação de Pés" value={editingUser.spiritual?.nacaoObrigaPes} onChange={(v) => updateSpiritual('nacaoObrigaPes', v)} />
                     <Input label="Passagem" value={editingUser.spiritual?.nacaoPassagem} onChange={(v) => updateSpiritual('nacaoPassagem', v)} />
                     
