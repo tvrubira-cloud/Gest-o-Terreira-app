@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import type { Charge, ChargeType, BankAccount } from '../store/useStore';
-import { DollarSign, Plus, ArrowLeft, CheckCircle, Clock, Users, Building2, AlertCircle, Landmark, Trash2, Copy, Calendar, History, TrendingUp, TrendingDown, ChevronDown, ChevronUp, Filter } from 'lucide-react';
+import { DollarSign, Plus, ArrowLeft, CheckCircle, Clock, Users, Building2, AlertCircle, Landmark, Trash2, Copy, Calendar, History, TrendingUp, TrendingDown, ChevronDown, Filter } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { generatePixPayload } from '../utils/pix';
@@ -565,7 +565,6 @@ export default function Financial() {
             const member = users.find(u => u.id === selectedMemberId);
             const memberCharges = periodFiltered.filter(c => c.assignedTo.includes(selectedMemberId));
             const paid = memberCharges.filter(c => c.paidBy.includes(selectedMemberId));
-            const notified = memberCharges.filter(c => !c.paidBy.includes(selectedMemberId) && (c.notifiedBy || []).includes(selectedMemberId));
             const overdue = memberCharges.filter(c => !c.paidBy.includes(selectedMemberId) && new Date(c.dueDate) < today);
             const pending = memberCharges.filter(c => !c.paidBy.includes(selectedMemberId));
 
