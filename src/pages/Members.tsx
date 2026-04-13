@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStore, defaultSpiritualData } from '../store/useStore';
 import type { User, SpiritualData } from '../store/useStore';
-import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2, UserCheck, UserX, Calendar } from 'lucide-react';
+import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2, UserCheck, UserX, Calendar, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { uploadImage } from '../utils/uploadImage';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -33,6 +33,12 @@ export default function Members() {
   const [bulkSegTipo, setBulkSegTipo] = useState<'umbanda' | 'quimbanda' | 'nacao' | ''>('');
   const [bulkSegOrigem, setBulkSegOrigem] = useState('');
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // Membro pode editar o próprio cadastro livremente; staff edita qualquer um
   const isOwnProfile = editingUser?.id === currentUser?.id;
@@ -83,6 +89,7 @@ export default function Members() {
       return updateUser(u.id, { ...u, spiritual });
     }));
     clearSelection();
+    showToast(`Segmento aplicado a ${targets.length} membro(s) com sucesso!`);
   };
 
   const handleBulkDelete = async () => {
@@ -155,7 +162,7 @@ export default function Members() {
         await addUser(editingUser as Omit<User, 'id' | 'createdAt' | 'terreiroId'>);
       }
 
-      alert("Dados salvos com sucesso!");
+      showToast('Dados salvos com sucesso!');
 
       if (isAdmin) {
         setView('LIST');
@@ -227,12 +234,27 @@ export default function Members() {
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
       style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
     >
+      {/* Toast de confirmação */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: '2rem', left: '50%', transform: 'translateX(-50%)',
+          background: 'linear-gradient(90deg, rgba(0,255,136,0.15), rgba(0,240,255,0.15))',
+          border: '1px solid #00ff88', color: '#00ff88', padding: '0.9rem 2rem',
+          borderRadius: 12, fontWeight: 'bold', fontSize: '1rem',
+          display: 'flex', alignItems: 'center', gap: '0.6rem',
+          zIndex: 9999, backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 24px rgba(0,255,136,0.2)'
+        }}>
+          <CheckCircle size={20} /> {toast}
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 className="text-gradient" style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
