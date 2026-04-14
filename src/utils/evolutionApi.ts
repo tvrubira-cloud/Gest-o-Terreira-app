@@ -96,19 +96,20 @@ export async function getEvolutionQrCode(
     });
 
     const createText = await createRes.text();
-    if (!createRes.ok) {
-      return { error: `Erro ao criar instância: HTTP ${createRes.status}: ${createText}` };
-    }
-
     let createData: any = {};
     try { createData = JSON.parse(createText); } catch {}
+
+    const alreadyExists = !createRes.ok && createText.includes('already exists');
+    if (!createRes.ok && !alreadyExists) {
+      return { error: `Erro ao criar instância: HTTP ${createRes.status}: ${createText}` };
+    }
 
     // QR pode vir direto no create
     const qrFromCreate = createData?.qrcode?.base64 || createData?.hash?.qrcode?.base64;
     if (qrFromCreate) return { qrcode: qrFromCreate };
 
     // Aguarda instância ficar pronta e busca QR via connect
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 1500));
 
     const connectRes = await fetch(`${PROXY_BASE}/instance/connect/${config.instance}`, {
       headers: proxyHeaders(config),
