@@ -28,9 +28,26 @@ export default function Settings() {
   const [evolutionStatus, setEvolutionStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrCode, setQrCode] = useState('');
+  const [qrBlobUrl, setQrBlobUrl] = useState('');
   const [qrError, setQrError] = useState('');
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [qrConnected, setQrConnected] = useState(false);
+
+  useEffect(() => {
+    if (!qrCode) { setQrBlobUrl(''); return; }
+    try {
+      const base64 = qrCode.includes(',') ? qrCode.split(',')[1] : qrCode;
+      const bytes = atob(base64);
+      const array = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) array[i] = bytes.charCodeAt(i);
+      const blob = new Blob([array], { type: 'image/png' });
+      const url = URL.createObjectURL(blob);
+      setQrBlobUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } catch {
+      setQrBlobUrl(qrCode);
+    }
+  }, [qrCode]);
 
   useEffect(() => {
     if (!EVOLUTION_URL || !EVOLUTION_KEY || !evolutionInstance) return;
@@ -511,7 +528,7 @@ export default function Settings() {
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
                       Abra o WhatsApp → <strong>Dispositivos conectados</strong> → <strong>Conectar dispositivo</strong> → escaneie:
                     </p>
-                    <img src={qrCode} alt="QR Code WhatsApp" style={{ width: 260, height: 260, borderRadius: 12, background: '#fff', padding: 8 }} />
+                    <img src={qrBlobUrl || qrCode} alt="QR Code WhatsApp" style={{ width: 260, height: 260, borderRadius: 12, background: '#fff', padding: 8 }} />
                     <p style={{ color: '#ffb432', fontSize: '0.8rem', textAlign: 'center' }}>Aguardando leitura... O QR Code expira em 60 segundos.</p>
                     <button onClick={handleGenerateQr} style={{ background: 'none', border: 'none', color: '#25d366', cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline' }}>
                       Gerar novo QR Code
