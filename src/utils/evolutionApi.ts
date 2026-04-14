@@ -70,7 +70,11 @@ export async function createEvolutionInstance(
   config: EvolutionConfig
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Tenta deletar instância antiga se existir
+    // Tenta desconectar e deletar instância antiga se existir
+    await fetch(`${PROXY_BASE}/instance/logout/${config.instance}`, {
+      method: 'DELETE',
+      headers: proxyHeaders(config),
+    });
     await fetch(`${PROXY_BASE}/instance/delete/${config.instance}`, {
       method: 'DELETE',
       headers: proxyHeaders(config),
@@ -87,6 +91,10 @@ export async function createEvolutionInstance(
 
     if (!res.ok) {
       const body = await res.text();
+      // Se já existe, não é erro — segue para gerar QR
+      if (body.includes('already exists') || body.includes('Token already')) {
+        return { success: true };
+      }
       return { success: false, error: `HTTP ${res.status}: ${body}` };
     }
 
