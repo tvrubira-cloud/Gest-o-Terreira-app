@@ -1,6 +1,6 @@
 /**
  * Evolution API - utilitário para envio de mensagens via WhatsApp
- * Documentação: https://doc.evolution-api.com
+ * Usa Edge Function do Supabase como proxy para evitar CORS
  */
 
 export interface EvolutionConfig {
@@ -9,28 +9,29 @@ export interface EvolutionConfig {
   instance: string;  // nome da instância conectada
 }
 
+const PROXY_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-proxy`;
+
+function proxyHeaders(config: EvolutionConfig) {
+  return {
+    'Content-Type': 'application/json',
+    'x-evolution-url': config.url,
+    'x-evolution-key': config.apiKey,
+  };
+}
+
 export async function sendWhatsAppMessage(
   config: EvolutionConfig,
   phone: string,
   message: string
 ): Promise<{ success: boolean; error?: string }> {
-  // Normaliza o número: remove não-dígitos, garante DDI 55
   const digits = phone.replace(/\D/g, '');
   const number = digits.startsWith('55') ? digits : `55${digits}`;
 
-  const baseUrl = config.url.replace(/\/$/, '');
-
   try {
-    const res = await fetch(`${baseUrl}/message/sendText/${config.instance}`, {
+    const res = await fetch(`${PROXY_BASE}/message/sendText/${config.instance}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': config.apiKey,
-      },
-      body: JSON.stringify({
-        number,
-        text: message,
-      }),
+      headers: proxyHeaders(config),
+      body: JSON.stringify({ number, text: message }),
     });
 
     if (!res.ok) {
@@ -47,29 +48,20 @@ export async function sendWhatsAppMessage(
 export async function checkEvolutionConnection(
   config: EvolutionConfig
 ): Promise<{ connected: boolean; state?: string; error?: string }> {
-  const baseUrl = config.url.replace(/\/$/, '');
   try {
-    const res = await fetch(`${baseUrl}/instance/connectionState/${config.instance}`, {
-      headers: { 'apikey': config.apiKey },
+    const res = await fetch(`${PROXY_BASE}/instance/connectionState/${config.instance}`, {
+      headers: proxyHeaders(config),
     });
-    
+
     if (!res.ok) {
       const errorText = await res.text();
-      return { 
-        connected: false, 
-        error: `HTTP ${res.status}: ${errorText || res.statusText}` 
-      };
+      return { connected: false, error: `HTTP ${res.status}: ${errorText || res.statusText}` };
     }
-    
+
     const data = await res.json();
     const state = data?.instance?.state || data?.state || '';
     return { connected: state === 'open', state };
   } catch (err: any) {
-    return { 
-      connected: false, 
-      error: err.name === 'TypeError' && err.message === 'Failed to fetch'
-        ? 'Erro de rede ou CORS. Verifique se a URL está correta e se o CORS está permitido no servidor.'
-        : err.message 
-    };
+    return { connected: false, error: err.message };
   }
 }
