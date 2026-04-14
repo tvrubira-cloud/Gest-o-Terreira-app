@@ -88,11 +88,12 @@ export async function getEvolutionQrCode(
   config: EvolutionConfig
 ): Promise<{ qrcode?: string; error?: string }> {
   try {
-    // Cria instância (qrcode:true retorna o QR direto na v1.8.2)
+    // Cria instância com token único (sem token, a API usa instanceName que pode conflitar)
+    const token = `tok-${config.instance}`;
     const createRes = await fetch(`${PROXY_BASE}/instance/create`, {
       method: 'POST',
       headers: proxyHeaders(config),
-      body: JSON.stringify({ instanceName: config.instance, qrcode: true }),
+      body: JSON.stringify({ instanceName: config.instance, token, qrcode: true }),
     });
 
     const createText = await createRes.text();
