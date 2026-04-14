@@ -26,7 +26,6 @@ export default function Settings() {
   const evolutionInstance = currentTerreiro ? `terreiro-${currentTerreiro.id}` : '';
 
   const [evolutionStatus, setEvolutionStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
-  const [evolutionError, setEvolutionError] = useState('');
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrCode, setQrCode] = useState('');
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
@@ -40,7 +39,7 @@ export default function Settings() {
           setEvolutionStatus('ok');
         } else {
           setEvolutionStatus('error');
-          setEvolutionError(result.error || `Estado: ${result.state || 'desconhecido'}`);
+          
         }
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,7 +47,7 @@ export default function Settings() {
 
   const handleGenerateQr = async () => {
     if (!EVOLUTION_URL || !EVOLUTION_KEY || !evolutionInstance) {
-      setEvolutionError('Configuração da Evolution API não encontrada.');
+
       setEvolutionStatus('error');
       return;
     }
@@ -74,7 +73,7 @@ export default function Settings() {
         if (tries >= 12) clearInterval(interval);
       }, 5000);
     } else {
-      setEvolutionError(result.error || 'Erro ao gerar QR Code.');
+
       setEvolutionStatus('error');
       setShowQrModal(false);
     }
@@ -82,13 +81,13 @@ export default function Settings() {
 
   const handleTestEvolution = async () => {
     setEvolutionStatus('checking');
-    setEvolutionError('');
+
     const result = await checkEvolutionConnection({ url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: evolutionInstance });
     if (result.connected) {
       setEvolutionStatus('ok');
     } else {
       setEvolutionStatus('error');
-      setEvolutionError(result.error || `Estado: ${result.state || 'desconhecido'}`);
+      
     }
   };
 
