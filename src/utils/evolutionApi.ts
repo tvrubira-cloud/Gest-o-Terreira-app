@@ -65,3 +65,54 @@ export async function checkEvolutionConnection(
     return { connected: false, error: err.message };
   }
 }
+
+export async function createEvolutionInstance(
+  config: EvolutionConfig
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Tenta deletar instância antiga se existir
+    await fetch(`${PROXY_BASE}/instance/delete/${config.instance}`, {
+      method: 'DELETE',
+      headers: proxyHeaders(config),
+    });
+
+    const res = await fetch(`${PROXY_BASE}/instance/create`, {
+      method: 'POST',
+      headers: proxyHeaders(config),
+      body: JSON.stringify({
+        instanceName: config.instance,
+        integration: 'WHATSAPP-BAILEYS',
+        qrcode: true,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      return { success: false, error: `HTTP ${res.status}: ${body}` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function getEvolutionQrCode(
+  config: EvolutionConfig
+): Promise<{ qrcode?: string; error?: string }> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/instance/connect/${config.instance}`, {
+      headers: proxyHeaders(config),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      return { error: `HTTP ${res.status}: ${body}` };
+    }
+
+    const data = await res.json();
+    return { qrcode: data.base64 };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+}
