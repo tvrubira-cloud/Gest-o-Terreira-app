@@ -70,7 +70,6 @@ export async function createEvolutionInstance(
   config: EvolutionConfig
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Tenta desconectar e deletar instância antiga se existir
     await fetch(`${PROXY_BASE}/instance/logout/${config.instance}`, {
       method: 'DELETE',
       headers: proxyHeaders(config),
@@ -79,28 +78,9 @@ export async function createEvolutionInstance(
       method: 'DELETE',
       headers: proxyHeaders(config),
     });
-
-    const res = await fetch(`${PROXY_BASE}/instance/create`, {
-      method: 'POST',
-      headers: proxyHeaders(config),
-      body: JSON.stringify({
-        instanceName: config.instance,
-        qrcode: true,
-      }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      // Se já existe, não é erro — segue para gerar QR
-      if (body.includes('already exists') || body.includes('Token already')) {
-        return { success: true };
-      }
-      return { success: false, error: `HTTP ${res.status}: ${body}` };
-    }
-
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    return { success: true }; // ignora erros de delete
   }
 }
 
@@ -108,18 +88,32 @@ export async function getEvolutionQrCode(
   config: EvolutionConfig
 ): Promise<{ qrcode?: string; error?: string }> {
   try {
-    const res = await fetch(`${PROXY_BASE}/instance/connect/${config.instance}`, {
+    // Cria instância (qrcode:true retorna o QR direto na v1.8.2)
+    const createRes = await fetch(`${PROXY_BASE}/instance/create`, {
+      method: 'POST',
+      headers: proxyHeaders(config),
+      body: JSON.stringify({ instanceName: config.instance, qrcode: true }),
+    });
+
+    const createData = await createRes.json();
+
+    // QR pode vir direto no create
+    const qrFromCreate = createData?.qrcode?.base64 || createData?.hash?.qrcode?.base64;
+    if (qrFromCreate) return { qrcode: qrFromCreate };
+
+    // Ou busca via connect
+    const connectRes = await fetch(`${PROXY_BASE}/instance/connect/${config.instance}`, {
       headers: proxyHeaders(config),
     });
 
-    if (!res.ok) {
-      const body = await res.text();
-      return { error: `HTTP ${res.status}: ${body}` };
+    if (!connectRes.ok) {
+      const body = await connectRes.text();
+      return { error: `HTTP ${connectRes.status}: ${body}` };
     }
 
-    const data = await res.json();
-    const qrcode = data.base64 || data.qrcode?.base64 || data.qrcode;
-    if (!qrcode) return { error: `Resposta inesperada: ${JSON.stringify(data)}` };
+    const connectData = await connectRes.json();
+    const qrcode = connectData.base64 || connectData.qrcode?.base64 || connectData.qrcode;
+    if (!qrcode) return { error: `Resposta inesperada: ${JSON.stringify(connectData)}` };
     return { qrcode };
   } catch (err: any) {
     return { error: err.message };
