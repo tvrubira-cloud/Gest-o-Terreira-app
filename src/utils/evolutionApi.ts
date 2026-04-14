@@ -111,7 +111,9 @@ export async function getEvolutionQrCode(
     }
 
     const data = await res.json();
-    return { qrcode: data.base64 };
+    const qrcode = data.base64 || data.qrcode?.base64 || data.qrcode;
+    if (!qrcode) return { error: `Resposta inesperada: ${JSON.stringify(data)}` };
+    return { qrcode };
   } catch (err: any) {
     return { error: err.message };
   }

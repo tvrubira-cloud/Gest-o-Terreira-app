@@ -28,6 +28,7 @@ export default function Settings() {
   const [evolutionStatus, setEvolutionStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrCode, setQrCode] = useState('');
+  const [qrError, setQrError] = useState('');
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [qrConnected, setQrConnected] = useState(false);
 
@@ -54,6 +55,7 @@ export default function Settings() {
     setIsGeneratingQr(true);
     setShowQrModal(true);
     setQrCode('');
+    setQrError('');
     setQrConnected(false);
     const config = { url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: evolutionInstance };
     await createEvolutionInstance(config);
@@ -75,7 +77,7 @@ export default function Settings() {
     } else {
 
       setEvolutionStatus('error');
-      setShowQrModal(false);
+      setQrError(result.error || 'Erro ao gerar QR Code.');
     }
   };
 
@@ -510,6 +512,12 @@ export default function Settings() {
                       Gerar novo QR Code
                     </button>
                   </>
+                ) : qrError ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '1rem' }}>
+                    <WifiOff size={40} color="#ff4c4c" />
+                    <p style={{ color: '#ff4c4c', textAlign: 'center', fontSize: '0.85rem', wordBreak: 'break-all' }}>{qrError}</p>
+                    <button onClick={handleGenerateQr} className="glass-panel glow-fx" style={{ padding: '0.8rem 1.5rem', background: 'rgba(37,211,102,0.15)', border: '1px solid #25d366', color: '#25d366', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>Tentar novamente</button>
+                  </div>
                 ) : null}
               </div>
             </div>
