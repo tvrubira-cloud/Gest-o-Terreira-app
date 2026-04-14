@@ -25,8 +25,10 @@ Deno.serve(async (req) => {
     }
 
     const url = new URL(req.url);
-    const path = url.pathname.replace('/functions/v1/evolution-proxy', '');
+    // Remove qualquer prefixo até evolution-proxy inclusive
+    const path = url.pathname.replace(/^.*\/evolution-proxy/, '');
     const targetUrl = `${evolutionUrl.replace(/\/$/, '')}${path}${url.search}`;
+    console.log('PATH:', url.pathname, '→', path, '→', targetUrl);
 
     const body = req.method !== 'GET' && req.method !== 'DELETE' ? await req.text() : undefined;
 
