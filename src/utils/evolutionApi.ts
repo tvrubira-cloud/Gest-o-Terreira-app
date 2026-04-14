@@ -14,6 +14,7 @@ const PROXY_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-
 function proxyHeaders(config: EvolutionConfig) {
   return {
     'Content-Type': 'application/json',
+    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
     'x-evolution-url': config.url,
     'x-evolution-key': config.apiKey,
   };
