@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
 import { useStore } from '../store/useStore';
 import { supabase } from '../lib/supabase';
 import { Upload, Save, Building, Trash2, AlertTriangle, X, CheckCircle2, MessageCircle, Wifi, WifiOff, Loader2 } from 'lucide-react';
@@ -512,9 +511,7 @@ export default function Settings() {
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
                       Abra o WhatsApp → <strong>Dispositivos conectados</strong> → <strong>Conectar dispositivo</strong> → escaneie:
                     </p>
-                    <div style={{ background: '#fff', padding: 12, borderRadius: 12 }}>
-                      <QRCodeSVG value={qrCode} size={240} />
-                    </div>
+                    <img src={qrCode} alt="QR Code WhatsApp" style={{ width: 260, height: 260, borderRadius: 12, background: '#fff', padding: 8 }} />
                     <p style={{ color: '#ffb432', fontSize: '0.8rem', textAlign: 'center' }}>Aguardando leitura... O QR Code expira em 60 segundos.</p>
                     <button onClick={handleGenerateQr} style={{ background: 'none', border: 'none', color: '#25d366', cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline' }}>
                       Gerar novo QR Code

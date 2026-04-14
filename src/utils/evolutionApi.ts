@@ -106,7 +106,7 @@ export async function getEvolutionQrCode(
     }
 
     // QR pode vir direto no create
-    const qrFromCreate = createData?.qrcode?.code || createData?.hash?.qrcode?.code;
+    const qrFromCreate = createData?.qrcode?.base64 || createData?.hash?.qrcode?.base64;
     if (qrFromCreate) return { qrcode: qrFromCreate };
 
     // Aguarda instância ficar pronta e busca QR via connect

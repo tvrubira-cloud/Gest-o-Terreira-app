@@ -41,11 +41,12 @@ Deno.serve(async (req) => {
       body,
     });
 
-    const data = await response.text();
-
-    return new Response(data, {
+    return new Response(response.body, {
       status: response.status,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: {
+        ...corsHeaders,
+        'Content-Type': response.headers.get('Content-Type') || 'application/json',
+      },
     });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), {
