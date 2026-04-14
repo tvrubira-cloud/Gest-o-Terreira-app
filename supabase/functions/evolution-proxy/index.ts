@@ -1,8 +1,6 @@
 // supabase/functions/evolution-proxy/index.ts
 // Proxy para Evolution API — resolve CORS do navegador
-//
-// Deploy:
-//   supabase functions deploy evolution-proxy --project-ref xbutdadniizewcwqmvuy
+// JWT verification desabilitada pois o app usa auth próprio
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
