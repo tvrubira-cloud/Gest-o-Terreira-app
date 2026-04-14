@@ -23,7 +23,7 @@ export default function Settings() {
 
   const EVOLUTION_URL = import.meta.env.VITE_EVOLUTION_URL || '';
   const EVOLUTION_KEY = import.meta.env.VITE_EVOLUTION_KEY || '';
-  const evolutionInstance = currentTerreiro ? `terreiro-${currentTerreiro.id}` : '';
+  const evolutionInstance = currentTerreiro ? `orum-${currentTerreiro.id}` : '';
 
   const [evolutionStatus, setEvolutionStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
   const [showQrModal, setShowQrModal] = useState(false);
