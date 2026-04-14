@@ -95,13 +95,21 @@ export async function getEvolutionQrCode(
       body: JSON.stringify({ instanceName: config.instance, qrcode: true }),
     });
 
-    const createData = await createRes.json();
+    const createText = await createRes.text();
+    if (!createRes.ok) {
+      return { error: `Erro ao criar instância: HTTP ${createRes.status}: ${createText}` };
+    }
+
+    let createData: any = {};
+    try { createData = JSON.parse(createText); } catch {}
 
     // QR pode vir direto no create
     const qrFromCreate = createData?.qrcode?.base64 || createData?.hash?.qrcode?.base64;
     if (qrFromCreate) return { qrcode: qrFromCreate };
 
-    // Ou busca via connect
+    // Aguarda instância ficar pronta e busca QR via connect
+    await new Promise(r => setTimeout(r, 2000));
+
     const connectRes = await fetch(`${PROXY_BASE}/instance/connect/${config.instance}`, {
       headers: proxyHeaders(config),
     });
@@ -113,7 +121,7 @@ export async function getEvolutionQrCode(
 
     const connectData = await connectRes.json();
     const qrcode = connectData.base64 || connectData.qrcode?.base64 || connectData.qrcode;
-    if (!qrcode) return { error: `Resposta inesperada: ${JSON.stringify(connectData)}` };
+    if (!qrcode) return { error: `Resposta create: ${createText} | Resposta connect: ${JSON.stringify(connectData)}` };
     return { qrcode };
   } catch (err: any) {
     return { error: err.message };
