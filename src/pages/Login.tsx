@@ -7,13 +7,14 @@ import '../App.css';
 
 export default function Login() {
   const [step, setStep] = useState<'CPF' | 'PASSWORD' | 'SET_PASSWORD' | 'RECOVER_PASSWORD'>('CPF');
-  const [cpf, setCpf] = useState('');
+  const [cpf, setCpf] = useState(() => localStorage.getItem('orum_saved_cpf') || '');
+  const [rememberCpf, setRememberCpf] = useState(() => localStorage.getItem('orum_remember_cpf') === 'true');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [palavraChave, setPalavraChave] = useState('');
   const [userName, setUserName] = useState('');
   const [error, setError] = useState('');
-  
+
   const { login, checkCpf, setupPassword, recoverPassword, isLoading, currentUser } = useStore();
   const navigate = useNavigate();
 
@@ -27,7 +28,15 @@ export default function Login() {
   const handleCpfSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cpf) return setError('Por favor, informe seu CPF.');
-    
+
+    if (rememberCpf) {
+      localStorage.setItem('orum_saved_cpf', cpf);
+      localStorage.setItem('orum_remember_cpf', 'true');
+    } else {
+      localStorage.removeItem('orum_saved_cpf');
+      localStorage.removeItem('orum_remember_cpf');
+    }
+
     const result = await checkCpf(cpf);
     if (result.exists) {
       setUserName(result.userName || '');
@@ -142,6 +151,15 @@ export default function Login() {
                 style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,240,255,0.2)', padding: '1rem', color: '#fff', borderRadius: 12 }}
               />
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={rememberCpf}
+                onChange={e => setRememberCpf(e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: 'var(--neon-cyan)', cursor: 'pointer' }}
+              />
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Lembrar meu CPF neste dispositivo</span>
+            </label>
             {error && <span style={{ color: '#ff4c4c', fontSize: '0.85rem' }}>{error}</span>}
             <button type="submit" disabled={isLoading} className="glass-panel glow-fx" style={{ background: 'var(--neon-cyan)', color: '#000', padding: '1rem', fontWeight: 800, borderRadius: 12, cursor: 'pointer' }}>
               {isLoading ? 'Verificando...' : 'Continuar'}

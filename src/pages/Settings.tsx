@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { supabase } from '../lib/supabase';
-import { Upload, Save, Building, Trash2, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
+import { Upload, Save, Building, Trash2, AlertTriangle, X, CheckCircle2, MessageCircle, Wifi, WifiOff, Loader2 } from 'lucide-react';
+import { checkEvolutionConnection } from '../utils/evolutionApi';
 import * as XLSX from 'xlsx';
 import { uploadImage } from '../utils/uploadImage';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,6 +20,47 @@ export default function Settings() {
   const [pixKey, setPixKey] = useState(currentTerreiro?.pixKey || '');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+
+  const [evolutionUrl, setEvolutionUrl] = useState(currentTerreiro?.evolutionApiUrl || '');
+  const [evolutionKey, setEvolutionKey] = useState(currentTerreiro?.evolutionApiKey || '');
+  const [evolutionInstance, setEvolutionInstance] = useState(currentTerreiro?.evolutionInstance || '');
+  const [evolutionStatus, setEvolutionStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
+  const [evolutionError, setEvolutionError] = useState('');
+  const [isSavingEvolution, setIsSavingEvolution] = useState(false);
+
+  const handleSaveEvolution = async () => {
+    if (!currentTerreiro) return;
+    setIsSavingEvolution(true);
+    try {
+      await updateTerreiro(currentTerreiro.id, {
+        evolutionApiUrl: evolutionUrl,
+        evolutionApiKey: evolutionKey,
+        evolutionInstance: evolutionInstance,
+      });
+      setImportStatus('Integração WhatsApp salva com sucesso!');
+      setTimeout(() => setImportStatus(''), 3000);
+    } finally {
+      setIsSavingEvolution(false);
+    }
+  };
+
+  const handleTestEvolution = async () => {
+    if (!evolutionUrl || !evolutionKey || !evolutionInstance) {
+      setEvolutionError('Preencha todos os campos antes de testar.');
+      setEvolutionStatus('error');
+      return;
+    }
+    setEvolutionStatus('checking');
+    setEvolutionError('');
+    const result = await checkEvolutionConnection({ url: evolutionUrl, apiKey: evolutionKey, instance: evolutionInstance });
+    if (result.connected) {
+      setEvolutionStatus('ok');
+    } else {
+      setEvolutionStatus('error');
+      // more detailed error
+      setEvolutionError(result.error || `Estado: ${result.state || 'desconhecido'}`);
+    }
+  };
 
   // Import flow
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -352,6 +394,82 @@ export default function Settings() {
                 </motion.div>
               )}
             </AnimatePresence>
+          </div>
+
+          {/* Evolution API */}
+          <div className="panel glass-panel" style={{ padding: '2rem', borderRadius: 'var(--panel-radius)', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid rgba(37,211,102,0.25)' }}>
+            <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#25d366' }}>
+              <MessageCircle size={20} /> Integração WhatsApp (Evolution API)
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+              Configure sua instância da Evolution API para enviar mensagens automáticas de aniversário e comunicados via WhatsApp.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>URL da Evolution API</label>
+              <input
+                type="text"
+                value={evolutionUrl}
+                onChange={e => setEvolutionUrl(e.target.value)}
+                placeholder="https://api.suaevolution.com"
+                className="search-input glass-panel"
+                style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', width: '100%' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>API Key Global</label>
+              <input
+                type="password"
+                value={evolutionKey}
+                onChange={e => setEvolutionKey(e.target.value)}
+                placeholder="Sua chave de autenticação"
+                className="search-input glass-panel"
+                style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', width: '100%' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Nome da Instância</label>
+              <input
+                type="text"
+                value={evolutionInstance}
+                onChange={e => setEvolutionInstance(e.target.value)}
+                placeholder="Ex: terreiro-principal"
+                className="search-input glass-panel"
+                style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', width: '100%' }}
+              />
+            </div>
+
+            {evolutionStatus === 'ok' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#25d366', fontSize: '0.85rem', padding: '0.6rem 1rem', background: 'rgba(37,211,102,0.1)', borderRadius: 8 }}>
+                <Wifi size={16} /> WhatsApp conectado e funcionando!
+              </div>
+            )}
+            {evolutionStatus === 'error' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ff4c4c', fontSize: '0.85rem', padding: '0.6rem 1rem', background: 'rgba(255,76,76,0.1)', borderRadius: 8 }}>
+                <WifiOff size={16} /> {evolutionError || 'Não foi possível conectar.'}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.8rem' }}>
+              <button
+                onClick={handleTestEvolution}
+                disabled={evolutionStatus === 'checking'}
+                className="glass-panel"
+                style={{ flex: 1, padding: '0.8rem', background: 'rgba(37,211,102,0.08)', border: '1px solid rgba(37,211,102,0.4)', color: '#25d366', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600 }}
+              >
+                {evolutionStatus === 'checking' ? <><Loader2 size={15} className="spin" /> Testando...</> : <><Wifi size={15} /> Testar Conexão</>}
+              </button>
+              <button
+                onClick={handleSaveEvolution}
+                disabled={isSavingEvolution}
+                className="glass-panel glow-fx"
+                style={{ flex: 1, padding: '0.8rem', background: 'rgba(37,211,102,0.15)', border: '1px solid #25d366', color: '#25d366', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 700 }}
+              >
+                {isSavingEvolution ? <><Loader2 size={15} className="spin" /> Salvando...</> : <><Save size={15} /> Salvar</>}
+              </button>
+            </div>
           </div>
 
           <div className="panel glass-panel" style={{ padding: '2rem', borderRadius: 'var(--panel-radius)', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid rgba(255, 76, 76, 0.3)' }}>

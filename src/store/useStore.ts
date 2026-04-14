@@ -197,6 +197,9 @@ export interface Terreiro {
   segmentoUmbanda: boolean;
   segmentoKimbanda: boolean;
   segmentoNacao: boolean;
+  evolutionApiUrl?: string;
+  evolutionApiKey?: string;
+  evolutionInstance?: string;
 }
 
 interface AppState {
@@ -288,6 +291,9 @@ function dbToTerreiro(row: any): Terreiro {
     segmentoUmbanda: seg.umbanda ?? true,
     segmentoKimbanda: seg.kimbanda ?? false,
     segmentoNacao: seg.nacao ?? false,
+    evolutionApiUrl: row.evolution_api_url || '',
+    evolutionApiKey: row.evolution_api_key || '',
+    evolutionInstance: row.evolution_instance || '',
   };
 }
 
@@ -750,6 +756,9 @@ export const useStore = create<AppState>()((set, get) => ({
       if (terreiroData.endereco !== undefined) updateData.endereco = terreiroData.endereco;
       if (terreiroData.pixKey !== undefined) updateData.pix_key = terreiroData.pixKey;
       if (terreiroData.isBlocked !== undefined) updateData.is_blocked = terreiroData.isBlocked;
+      if (terreiroData.evolutionApiUrl !== undefined) updateData.evolution_api_url = terreiroData.evolutionApiUrl;
+      if (terreiroData.evolutionApiKey !== undefined) updateData.evolution_api_key = terreiroData.evolutionApiKey;
+      if (terreiroData.evolutionInstance !== undefined) updateData.evolution_instance = terreiroData.evolutionInstance;
 
       // Atualiza seguimento se algum campo foi passado
       if (

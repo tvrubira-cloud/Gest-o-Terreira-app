@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStore, defaultSpiritualData } from '../store/useStore';
 import type { User, SpiritualData } from '../store/useStore';
-import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2, UserCheck, UserX, Calendar, CheckCircle } from 'lucide-react';
+import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2, UserCheck, UserX, Calendar, CheckCircle, Camera, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { uploadImage } from '../utils/uploadImage';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -34,6 +34,52 @@ export default function Members() {
   const [bulkSegOrigem, setBulkSegOrigem] = useState('');
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+
+  const openCamera = async () => {
+    setShowCamera(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      cameraStreamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch {
+      alert('Não foi possível acessar a câmera. Verifique as permissões do navegador.');
+      setShowCamera(false);
+    }
+  };
+
+  const closeCamera = () => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach(t => t.stop());
+      cameraStreamRef.current = null;
+    }
+    setShowCamera(false);
+  };
+
+  const capturePhoto = async () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    canvas.getContext('2d')!.drawImage(videoRef.current, 0, 0);
+    closeCamera();
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      setIsUploadingPhoto(true);
+      try {
+        const file = new File([blob], 'foto_camera.jpg', { type: 'image/jpeg' });
+        const path = `fotos/${editingUser?.id || `new_${Date.now()}`}.jpg`;
+        const url = await uploadImage(file, path);
+        setEditingUser(prev => prev ? { ...prev, photoUrl: url } : null);
+      } catch (err: any) {
+        alert(`Erro ao salvar foto: ${err.message}`);
+      } finally {
+        setIsUploadingPhoto(false);
+      }
+    }, 'image/jpeg', 0.9);
+  };
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -252,6 +298,37 @@ export default function Members() {
           boxShadow: '0 4px 24px rgba(0,255,136,0.2)'
         }}>
           <CheckCircle size={20} /> {toast}
+        </div>
+      )}
+
+      {/* Modal câmera */}
+      {showCamera && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 10000, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '1.5rem' }}>
+          <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: 16, border: '1px solid var(--neon-purple)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.2rem', maxWidth: 480, width: '95%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+              <h3 style={{ color: 'var(--neon-purple)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Camera size={20} /> Tirar Foto
+              </h3>
+              <button onClick={closeCamera} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <X size={22} />
+              </button>
+            </div>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{ width: '100%', borderRadius: 10, background: '#000', maxHeight: 360, objectFit: 'cover' }}
+            />
+            <div style={{ display: 'flex', gap: '1rem', width: '100%' }}>
+              <button onClick={closeCamera} className="glass-panel" style={{ flex: 1, padding: '0.8rem', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: 8, cursor: 'pointer', background: 'transparent' }}>
+                Cancelar
+              </button>
+              <button onClick={capturePhoto} disabled={isUploadingPhoto} className="glass-panel glow-fx" style={{ flex: 2, padding: '0.8rem', background: 'rgba(176, 0, 255, 0.2)', border: '1px solid var(--neon-purple)', color: '#fff', borderRadius: 8, cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                {isUploadingPhoto ? <><Loader2 size={16} className="spin" /> Enviando...</> : <><Camera size={16} /> Capturar</>}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -661,6 +738,15 @@ export default function Members() {
                             }
                           }} />
                         </label>
+                        <button
+                          type="button"
+                          onClick={openCamera}
+                          disabled={isUploadingPhoto}
+                          className="glass-panel glow-fx"
+                          style={{ padding: '0.6rem 1.2rem', cursor: isUploadingPhoto ? 'wait' : 'pointer', background: 'rgba(176, 0, 255, 0.1)', border: '1px solid var(--neon-purple)', color: '#fff', borderRadius: 8, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isUploadingPhoto ? 0.7 : 1 }}
+                        >
+                          <Camera size={16} /> Tirar Foto
+                        </button>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Membro desde: {editingUser.createdAt ? new Date(editingUser.createdAt).toLocaleDateString() : 'Novo'}</span>
                       </div>
                     </div>
@@ -776,7 +862,7 @@ export default function Members() {
                         )}
                       </div>
                     </div>
-                    <Input label="Entidade de Cabeça / Pai / Mãe" value={editingUser.spiritual?.umbandaObrigaCabeca} onChange={(v) => updateSpiritual('umbandaObrigaCabeca', v)} />
+                    <Input label="Entidade de Cabeça / Pai / Mãe" value={editingUser.spiritual?.umbandaObrigaCabeca} onChange={(v) => { updateSpiritual('umbandaObrigaCabeca', v); setEditingUser(prev => prev ? { ...prev, nomeDeSanto: v } : null); }} />
                     <Input label="Entidade de Corpo / Pai / Mãe" value={editingUser.spiritual?.umbandaObrigaCorpo} onChange={(v) => updateSpiritual('umbandaObrigaCorpo', v)} />
                     
                     <div style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
@@ -893,7 +979,7 @@ export default function Members() {
                         )}
                       </div>
                     </div>
-                    <Input label="Entidade de Cabeça / Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCabeca} onChange={(v) => updateSpiritual('nacaoObrigaCabeca', v)} />
+                    <Input label="Entidade de Cabeça / Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCabeca} onChange={(v) => { updateSpiritual('nacaoObrigaCabeca', v); setEditingUser(prev => prev ? { ...prev, nomeDeSanto: v } : null); }} />
                     <Input label="Entidade de Corpo / Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCorpo} onChange={(v) => updateSpiritual('nacaoObrigaCorpo', v)} />
                     <Input label="Obrigação de Pés" value={editingUser.spiritual?.nacaoObrigaPes} onChange={(v) => updateSpiritual('nacaoObrigaPes', v)} />
                     <Input label="Passagem" value={editingUser.spiritual?.nacaoPassagem} onChange={(v) => updateSpiritual('nacaoPassagem', v)} />

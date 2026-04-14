@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Users, Calendar, Sparkles, ArrowRight, Megaphone, Bell, Trash2 } from 'lucide-react';
+import { Users, Calendar, Sparkles, ArrowRight, Megaphone, Bell, Trash2, Cake, MessageCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import logo from '../assets/logo.png';
+import { sendWhatsAppMessage } from '../utils/evolutionApi';
 
 export default function Dashboard() {
   const currentUser = useStore(state => state.currentUser);
@@ -18,6 +19,8 @@ export default function Dashboard() {
 
   const [showAllBroadcasts, setShowAllBroadcasts] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showAllBirthdays, setShowAllBirthdays] = useState(false);
+  const [sendingBirthdayId, setSendingBirthdayId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
@@ -58,6 +61,54 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   const displayedBroadcasts = showAllBroadcasts ? broadcasts : broadcasts.slice(0, 3);
+
+  const today = new Date();
+  const currentMonth = today.getMonth() + 1;
+  const currentDay = today.getDate();
+
+  const birthdaysThisMonth = users
+    .filter(u => {
+      if (!u.dataNascimento) return false;
+      const parts = u.dataNascimento.split('-');
+      if (parts.length < 2) return false;
+      return parseInt(parts[1]) === currentMonth;
+    })
+    .map(u => {
+      const parts = u.dataNascimento!.split('-');
+      const day = parseInt(parts[2]);
+      const isToday = day === currentDay;
+      const isPast = day < currentDay;
+      return { ...u, birthdayDay: day, isToday, isPast };
+    })
+    .sort((a, b) => a.birthdayDay - b.birthdayDay);
+
+  const displayedBirthdays = showAllBirthdays ? birthdaysThisMonth : birthdaysThisMonth.slice(0, 5);
+
+  const evolutionConfigured = !!(currentTerreiro?.evolutionApiUrl && currentTerreiro?.evolutionApiKey && currentTerreiro?.evolutionInstance);
+
+  const sendWhatsApp = async (u: typeof birthdaysThisMonth[0]) => {
+    const phone = (u.whatsapp || u.telefone || '').replace(/\D/g, '');
+    if (!phone) { alert(`${u.nomeCompleto} não possui WhatsApp cadastrado.`); return; }
+    const msg = `🎉 Feliz Aniversário, ${u.nomeCompleto}! Em nome de toda a família ${currentTerreiro?.name || 'do terreiro'}, desejamos muita luz, axé e bênçãos neste dia especial! 🕊️✨`;
+
+    if (evolutionConfigured) {
+      setSendingBirthdayId(u.id);
+      try {
+        const result = await sendWhatsAppMessage(
+          { url: currentTerreiro!.evolutionApiUrl!, apiKey: currentTerreiro!.evolutionApiKey!, instance: currentTerreiro!.evolutionInstance! },
+          phone,
+          msg
+        );
+        if (!result.success) alert(`Erro ao enviar: ${result.error}`);
+      } finally {
+        setSendingBirthdayId(null);
+      }
+    } else {
+      // Fallback: abre WhatsApp web com mensagem pré-preenchida
+      const numero = phone.startsWith('55') ? phone : `55${phone}`;
+      window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+  };
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -117,10 +168,59 @@ export default function Dashboard() {
         )}
       </motion.div>
 
-      <div className="grid-panels" style={{ 
-        display: 'grid', 
-        gridTemplateColumns: !isStaff ? 'minmax(0, 1.2fr) minmax(0, 0.8fr)' : '1fr', 
-        gap: '2rem' 
+      {isStaff && birthdaysThisMonth.length > 0 && (
+        <motion.div variants={itemVariants} className="glass-panel" style={{ padding: '1.5rem', borderRadius: 'var(--panel-radius)', border: `1px solid ${birthdaysThisMonth.some(b => b.isToday) ? '#ff80bf' : 'rgba(255,180,100,0.3)'}`, background: birthdaysThisMonth.some(b => b.isToday) ? 'rgba(255,100,180,0.06)' : 'rgba(255,180,50,0.04)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem' }}>
+              <Cake size={20} color={birthdaysThisMonth.some(b => b.isToday) ? '#ff80bf' : '#ffb432'} />
+              <h4 style={{ fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '1px', color: birthdaysThisMonth.some(b => b.isToday) ? '#ff80bf' : '#ffb432' }}>
+                Aniversariantes de {today.toLocaleString('pt-BR', { month: 'long' })}
+              </h4>
+              <span style={{ background: 'rgba(255,180,50,0.15)', color: '#ffb432', borderRadius: 20, padding: '0.15rem 0.7rem', fontSize: '0.8rem', fontWeight: 700 }}>{birthdaysThisMonth.length}</span>
+            </div>
+            {birthdaysThisMonth.length > 5 && (
+              <button onClick={() => setShowAllBirthdays(p => !p)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
+                {showAllBirthdays ? <><ChevronUp size={16} /> Ver menos</> : <><ChevronDown size={16} /> Ver todos</>}
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+            {displayedBirthdays.map(u => (
+              <div key={u.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.8rem 1rem', borderRadius: 10, background: u.isToday ? 'rgba(255,100,180,0.1)' : 'rgba(255,255,255,0.02)', border: `1px solid ${u.isToday ? 'rgba(255,100,180,0.4)' : 'var(--glass-border)'}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ width: 42, height: 42, borderRadius: '50%', overflow: 'hidden', border: `2px solid ${u.isToday ? '#ff80bf' : '#ffb432'}`, flexShrink: 0 }}>
+                    {u.photoUrl ? <img src={u.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>🎂</div>}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {u.nomeCompleto}
+                      {u.isToday && <span style={{ background: '#ff80bf', color: '#000', borderRadius: 20, padding: '0.1rem 0.6rem', fontSize: '0.7rem', fontWeight: 800 }}>HOJE 🎉</span>}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      Dia {u.birthdayDay} {u.isPast && !u.isToday ? '· já passou' : ''}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => sendWhatsApp(u)}
+                  disabled={sendingBirthdayId === u.id}
+                  title={evolutionConfigured ? 'Enviar via Evolution API' : 'Abrir WhatsApp Web'}
+                  className="glass-panel glow-fx"
+                  style={{ padding: '0.5rem 1rem', background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.4)', color: '#25d366', borderRadius: 8, cursor: sendingBirthdayId === u.id ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', opacity: sendingBirthdayId === u.id ? 0.6 : 1 }}
+                >
+                  {sendingBirthdayId === u.id ? <Loader2 size={15} className="spin" /> : <MessageCircle size={15} />}
+                  {sendingBirthdayId === u.id ? 'Enviando...' : 'Parabenizar'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      <div className="grid-panels" style={{
+        display: 'grid',
+        gridTemplateColumns: !isStaff ? 'minmax(0, 1.2fr) minmax(0, 0.8fr)' : '1fr',
+        gap: '2rem'
       }}>
         <motion.div variants={itemVariants} className="panel glass-panel holo-card" style={{ padding: '2rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1rem' }}>
