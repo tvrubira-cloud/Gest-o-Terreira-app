@@ -81,7 +81,6 @@ export async function createEvolutionInstance(
       headers: proxyHeaders(config),
       body: JSON.stringify({
         instanceName: config.instance,
-        integration: 'WHATSAPP-BAILEYS',
         qrcode: true,
       }),
     });

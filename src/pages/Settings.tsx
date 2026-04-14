@@ -58,7 +58,12 @@ export default function Settings() {
     setQrError('');
     setQrConnected(false);
     const config = { url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: evolutionInstance };
-    await createEvolutionInstance(config);
+    const created = await createEvolutionInstance(config);
+    if (!created.success) {
+      setIsGeneratingQr(false);
+      setQrError(`Erro ao criar instância: ${created.error}`);
+      return;
+    }
     const result = await getEvolutionQrCode(config);
     setIsGeneratingQr(false);
     if (result.qrcode) {
