@@ -31,7 +31,7 @@ export async function sendWhatsAppMessage(
     const res = await fetch(`${PROXY_BASE}/message/sendText/${config.instance}`, {
       method: 'POST',
       headers: proxyHeaders(config),
-      body: JSON.stringify({ number, text: message }),
+      body: JSON.stringify({ number, textMessage: { text: message } }),
     });
 
     if (!res.ok) {
