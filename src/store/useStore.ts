@@ -1254,7 +1254,7 @@ export const useStore = create<AppState>()((set, get) => ({
   addBroadcast: async (broadcastData) => {
     set({ isLoading: true });
     try {
-      const { currentTerreiroId } = get();
+      const { currentTerreiroId, users, terreiros } = get();
       const { data, error } = await supabase
         .from('broadcasts')
         .insert({
@@ -1271,6 +1271,47 @@ export const useStore = create<AppState>()((set, get) => ({
       if (!error && data) {
         const newBroadcast = dbToBroadcast(data);
         set({ broadcasts: [newBroadcast, ...get().broadcasts] });
+
+        // Enviar WhatsApp para membros com número cadastrado
+        const EVOLUTION_URL = import.meta.env.VITE_EVOLUTION_URL || '';
+        const EVOLUTION_KEY = import.meta.env.VITE_EVOLUTION_KEY || '';
+        if (EVOLUTION_URL && EVOLUTION_KEY) {
+          const { sendWhatsAppMessage } = await import('../utils/evolutionApi');
+          const msg = `📢 *${broadcastData.title}*\n\n${broadcastData.body}`;
+
+          if (broadcastData.isGlobal) {
+            // Envia para cada terreiro usando sua própria instância
+            const terreiroIds = [...new Set(users.map(u => u.terreiroId).filter(Boolean))];
+            console.log('[WhatsApp Broadcast Global] terreiros:', terreiroIds, 'total users:', users.length);
+            for (const tid of terreiroIds) {
+              const terreiro = terreiros.find(t => t.id === tid);
+              if (!terreiro) continue;
+              const instanceName = `orum-${tid}`;
+              const config = { url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: instanceName };
+              const members = users.filter(u => u.terreiroId === tid && (u.whatsapp || u.telefone));
+              console.log(`[WhatsApp] terreiro ${tid}: ${members.length} membros com telefone`);
+              for (const member of members) {
+                const phone = (member.whatsapp || member.telefone || '').replace(/\D/g, '');
+                if (phone.length >= 10) {
+                  console.log(`[WhatsApp] enviando para ${phone}`);
+                  sendWhatsAppMessage(config, phone, msg).catch((e) => console.error('[WhatsApp] erro:', e));
+                }
+              }
+            }
+          } else if (currentTerreiroId) {
+            const instanceName = `orum-${currentTerreiroId}`;
+            const config = { url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: instanceName };
+            const members = users.filter(u => u.terreiroId === currentTerreiroId && (u.whatsapp || u.telefone));
+            console.log(`[WhatsApp Broadcast Local] terreiro ${currentTerreiroId}: ${members.length} membros com telefone`, members.map(m => ({ nome: m.nomeCompleto, tel: m.telefone, wa: m.whatsapp })));
+            for (const member of members) {
+              const phone = (member.whatsapp || member.telefone || '').replace(/\D/g, '');
+              if (phone.length >= 10) {
+                sendWhatsAppMessage(config, phone, msg).catch(() => {});
+              }
+            }
+          }
+        }
+
         // Enviar push para todos do terreiro se não for global
         if (!broadcastData.isGlobal && currentTerreiroId) {
           get().sendPushToTerreiro(
