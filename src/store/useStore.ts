@@ -1280,21 +1280,17 @@ export const useStore = create<AppState>()((set, get) => ({
           const msg = `📢 *${broadcastData.title}*\n\n${broadcastData.body}`;
 
           if (broadcastData.isGlobal) {
-            // Envia para cada terreiro usando sua própria instância
             const terreiroIds = [...new Set(users.map(u => u.terreiroId).filter(Boolean))];
-            console.log('[WhatsApp Broadcast Global] terreiros:', terreiroIds, 'total users:', users.length);
             for (const tid of terreiroIds) {
               const terreiro = terreiros.find(t => t.id === tid);
               if (!terreiro) continue;
               const instanceName = `orum-${tid}`;
               const config = { url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: instanceName };
               const members = users.filter(u => u.terreiroId === tid && (u.whatsapp || u.telefone));
-              console.log(`[WhatsApp] terreiro ${tid}: ${members.length} membros com telefone`);
               for (const member of members) {
                 const phone = (member.whatsapp || member.telefone || '').replace(/\D/g, '');
                 if (phone.length >= 10) {
-                  console.log(`[WhatsApp] enviando para ${phone}`);
-                  sendWhatsAppMessage(config, phone, msg).catch((e) => console.error('[WhatsApp] erro:', e));
+                  sendWhatsAppMessage(config, phone, msg).catch(() => {});
                 }
               }
             }
@@ -1302,7 +1298,6 @@ export const useStore = create<AppState>()((set, get) => ({
             const instanceName = `orum-${currentTerreiroId}`;
             const config = { url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: instanceName };
             const members = users.filter(u => u.terreiroId === currentTerreiroId && (u.whatsapp || u.telefone));
-            console.log(`[WhatsApp Broadcast Local] terreiro ${currentTerreiroId}: ${members.length} membros com telefone`, members.map(m => ({ nome: m.nomeCompleto, tel: m.telefone, wa: m.whatsapp })));
             for (const member of members) {
               const phone = (member.whatsapp || member.telefone || '').replace(/\D/g, '');
               if (phone.length >= 10) {
