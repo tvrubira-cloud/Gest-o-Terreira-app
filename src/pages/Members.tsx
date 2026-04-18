@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStore, defaultSpiritualData } from '../store/useStore';
 import type { User, SpiritualData } from '../store/useStore';
-import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2, UserCheck, UserX, Calendar, CheckCircle, Camera, X } from 'lucide-react';
+import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2, UserCheck, UserX, Calendar, CheckCircle, Camera, X, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { uploadImage } from '../utils/uploadImage';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -20,7 +20,7 @@ export default function Members() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
   const [isSearchingCep, setIsSearchingCep] = useState(false);
-  const [activeTab, setActiveTab] = useState<'pessoal' | 'umbanda' | 'quimbanda' | 'nacao' | 'obrigacoes' | 'financeiro'>('pessoal');
+  const [activeTab, setActiveTab] = useState<'pessoal' | 'umbanda' | 'quimbanda' | 'nacao' | 'financeiro'>('pessoal');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; userId: string; userName: string }>({
@@ -33,6 +33,7 @@ export default function Members() {
   const [bulkSegTipo, setBulkSegTipo] = useState<'umbanda' | 'quimbanda' | 'nacao' | ''>('');
   const [bulkSegOrigem, setBulkSegOrigem] = useState('');
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [showWhatsAppPanel, setShowWhatsAppPanel] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -114,7 +115,18 @@ export default function Members() {
   const toggleSelectAll = () =>
     setSelectedIds(allVisibleSelected ? new Set() : new Set(filteredUsers.map(u => u.id)));
 
-  const clearSelection = () => { setSelectedIds(new Set()); setBulkSegPanel(false); setBulkSegTipo(''); setBulkSegOrigem(''); setBulkDeleteConfirm(false); };
+  const clearSelection = () => { setSelectedIds(new Set()); setBulkSegPanel(false); setBulkSegTipo(''); setBulkSegOrigem(''); setBulkDeleteConfirm(false); setShowWhatsAppPanel(false); };
+
+  const openWhatsApp = (phone: string) => {
+    const cleaned = phone.replace(/\D/g, '');
+    if (!cleaned) return;
+    const number = cleaned.startsWith('55') ? cleaned : `55${cleaned}`;
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const url = isMobile
+      ? `whatsapp://send?phone=${number}`
+      : `https://web.whatsapp.com/send?phone=${number}`;
+    window.open(url, '_blank');
+  };
 
   const handleBulkStatus = async (status: 'ativo' | 'inativo') => {
     const targets = users.filter(u => selectedIds.has(u.id));
@@ -145,7 +157,7 @@ export default function Members() {
   };
 
   const getAvailableTabs = () => {
-    const tabs: { id: 'pessoal' | 'umbanda' | 'quimbanda' | 'nacao' | 'obrigacoes' | 'financeiro'; label: string }[] = [
+    const tabs: { id: 'pessoal' | 'umbanda' | 'quimbanda' | 'nacao' | 'financeiro'; label: string }[] = [
       { id: 'pessoal', label: 'Dados Pessoais' }
     ];
 
@@ -155,7 +167,6 @@ export default function Members() {
       if (editingUser?.spiritual?.segmentoUmbanda) tabs.push({ id: 'umbanda', label: 'Umbanda' });
       if (editingUser?.spiritual?.segmentoKimbanda) tabs.push({ id: 'quimbanda', label: 'Quimbanda' });
       if (editingUser?.spiritual?.segmentoNacao) tabs.push({ id: 'nacao', label: 'Nação de Orixás' });
-      tabs.push({ id: 'obrigacoes', label: 'Calendário de Obrigações' });
     }
 
     // Apenas Admin e Financeiro veem a aba financeira do membro
@@ -209,10 +220,6 @@ export default function Members() {
       }
 
       showToast('Dados salvos com sucesso!');
-
-      if (isAdmin) {
-        setView('LIST');
-      }
     } catch (err: any) {
       console.error('Erro ao salvar:', err);
       alert(`Erro ao salvar os dados: ${err.message || 'Verifique sua conexão e tente novamente.'}`);
@@ -277,6 +284,67 @@ export default function Members() {
     const newObrigs = [...editingUser.spiritual.obrigacoes];
     newObrigs[index] = { ...newObrigs[index], [field]: value };
     updateSpiritual('obrigacoes', newObrigs);
+  };
+
+  const toArr = (v: any): string[] => Array.isArray(v) ? v : (v ? [String(v)] : []);
+
+  const renderDynamicList = (fieldKey: keyof SpiritualData, label: string, color: string = 'var(--neon-cyan)') => {
+    const items = toArr((editingUser?.spiritual as any)?.[fieldKey]);
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{label}</label>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => updateSpiritual(fieldKey, [...items, ''])}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem', borderRadius: 6, border: `1px solid ${color}`, background: `${color}18`, color, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700 }}
+            >
+              <Plus size={12} />
+            </button>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          {items.length === 0 && (
+            <textarea
+              className="search-input glass-panel"
+              rows={1}
+              style={{ flex: 1, padding: '0.55rem 0.8rem', border: '1px solid var(--glass-border)', borderRadius: 8, fontSize: '0.85rem', opacity: 0.5, resize: 'none', overflow: 'hidden', lineHeight: '1.5' }}
+              value=""
+              readOnly
+              placeholder="Clique em + para adicionar..."
+            />
+          )}
+          {items.map((item, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: '0.4rem', alignItems: 'flex-start' }}>
+              <textarea
+                className="search-input glass-panel"
+                rows={1}
+                style={{ flex: 1, padding: '0.55rem 0.8rem', border: '1px solid var(--glass-border)', borderRadius: 8, fontSize: '0.85rem', resize: 'none', overflow: 'hidden', lineHeight: '1.5' }}
+                value={item}
+                ref={el => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
+                onChange={e => {
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                  const u = [...items]; u[idx] = e.target.value; updateSpiritual(fieldKey, u);
+                }}
+                placeholder={`${label} ${idx + 1}`}
+                readOnly={!canEdit}
+              />
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => updateSpiritual(fieldKey, items.filter((_, i) => i !== idx))}
+                  style={{ padding: '0.35rem', borderRadius: 6, border: '1px solid rgba(255,76,76,0.3)', background: 'rgba(255,76,76,0.08)', color: '#ff4c4c', cursor: 'pointer', display: 'flex', alignItems: 'center', marginTop: '0.15rem' }}
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -511,6 +579,44 @@ export default function Members() {
                 )}
               </div>
 
+              {/* WhatsApp em massa */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <button
+                  onClick={() => setShowWhatsAppPanel(p => !p)}
+                  style={{ padding: '0.4rem 1rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', background: showWhatsAppPanel ? 'rgba(37,211,102,0.25)' : 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.4)', color: '#25d366', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                >
+                  <MessageCircle size={14} /> WhatsApp{showWhatsAppPanel ? ' ▲' : ' ▼'}
+                </button>
+
+                {showWhatsAppPanel && (() => {
+                  const selected = users.filter(u => selectedIds.has(u.id));
+                  return (
+                    <div style={{ padding: '0.8rem', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(37,211,102,0.3)', borderRadius: 10, display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: 260, maxHeight: 260, overflowY: 'auto' }}>
+                      {selected.map(u => {
+                        const phone = (u.whatsapp || u.telefone || '').trim();
+                        return (
+                          <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.6rem' }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {u.nomeCompleto}
+                            </span>
+                            {phone ? (
+                              <button
+                                onClick={() => openWhatsApp(phone)}
+                                style={{ flexShrink: 0, padding: '0.3rem 0.7rem', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(37,211,102,0.15)', border: '1px solid #25d366', color: '#25d366', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                              >
+                                <MessageCircle size={12} /> Abrir
+                              </button>
+                            ) : (
+                              <span style={{ flexShrink: 0, fontSize: '0.72rem', color: '#ff4c4c' }}>Sem número</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
               {/* Cancelar seleção */}
               <button onClick={clearSelection} style={{ marginLeft: 'auto', padding: '0.4rem 0.8rem', borderRadius: 8, fontSize: '0.78rem', cursor: 'pointer', background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-muted)', alignSelf: 'flex-start' }}>
                 × Cancelar
@@ -639,6 +745,18 @@ export default function Members() {
                         >
                           <Edit2 size={16} color="var(--neon-cyan)" />
                         </button>
+
+                        {/* WhatsApp */}
+                        {(u.whatsapp || u.telefone) && (
+                          <button
+                            onClick={() => openWhatsApp(u.whatsapp || u.telefone || '')}
+                            className="icon-btn"
+                            title="Abrir WhatsApp"
+                            style={{ background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)', padding: '6px', borderRadius: '8px', color: '#25d366' }}
+                          >
+                            <MessageCircle size={16} />
+                          </button>
+                        )}
 
                         {/* Toggle ativo / inativo */}
                         {isStaff && u.id !== currentUser?.id && !u.isMaster && (() => {
@@ -866,20 +984,20 @@ export default function Members() {
                     <Input label="Entidade de Corpo / Pai / Mãe" value={editingUser.spiritual?.umbandaObrigaCorpo} onChange={(v) => updateSpiritual('umbandaObrigaCorpo', v)} />
                     
                     <div style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
-                      <h4 style={{ color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.9rem', textTransform: 'uppercase' }}>Obrigações Anteriores</h4>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                        <Input label="Mata" value={editingUser.spiritual?.umbandaAnteriorMata} onChange={(v) => updateSpiritual('umbandaAnteriorMata', v)} />
-                        <Input label="Mar" value={editingUser.spiritual?.umbandaAnteriorMar} onChange={(v) => updateSpiritual('umbandaAnteriorMar', v)} />
-                        <Input label="Entidades" value={editingUser.spiritual?.umbandaAnteriorEntidades} onChange={(v) => updateSpiritual('umbandaAnteriorEntidades', v)} />
-                        <Input label="Caboclo" value={editingUser.spiritual?.umbandaAnteriorCaboclo} onChange={(v) => updateSpiritual('umbandaAnteriorCaboclo', v)} />
-                        <Input label="Preto Velho" value={editingUser.spiritual?.umbandaAnteriorPretoVelho} onChange={(v) => updateSpiritual('umbandaAnteriorPretoVelho', v)} />
+                      <h4 style={{ color: 'var(--text-muted)', marginBottom: '1.2rem', fontSize: '0.9rem', textTransform: 'uppercase', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem' }}>Obrigações Anteriores</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.2rem' }}>
+                        {renderDynamicList('umbandaAnteriorMata', 'Mata', '#00f0ff')}
+                        {renderDynamicList('umbandaAnteriorMar', 'Mar', '#00f0ff')}
+                        {renderDynamicList('umbandaAnteriorEntidades', 'Entidades', '#00f0ff')}
+                        {renderDynamicList('umbandaAnteriorCaboclo', 'Caboclo', '#00f0ff')}
+                        {renderDynamicList('umbandaAnteriorPretoVelho', 'Preto Velho', '#00f0ff')}
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Observações</label>
+                          <textarea className="search-input glass-panel" rows={5} style={{ width: '100%', padding: '0.8rem', border: '1px solid var(--glass-border)', marginTop: '0.5rem', resize: 'vertical' }} value={editingUser.spiritual?.umbandaObs as string || ''} onChange={(e) => updateSpiritual('umbandaObs', e.target.value)} />
+                        </div>
                       </div>
                     </div>
 
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Observações</label>
-                      <textarea className="search-input glass-panel" rows={3} style={{ width: '100%', padding: '0.8rem', border: '1px solid var(--glass-border)', marginTop: '0.5rem' }} value={editingUser.spiritual?.umbandaObs} onChange={(e) => updateSpiritual('umbandaObs', e.target.value)} />
-                    </div>
                   </div>
                 </motion.div>
               )}
@@ -925,14 +1043,11 @@ export default function Members() {
                     </div>
                     <Input label="Obrigação de Frente" value={editingUser.spiritual?.quimbandaObrigaFrente} onChange={(v) => updateSpiritual('quimbandaObrigaFrente', v)} />
                     <Input label="Companheiro(a)" value={editingUser.spiritual?.quimbandaObrigaCompanheiro} onChange={(v) => updateSpiritual('quimbandaObrigaCompanheiro', v)} />
-                    <Input label="Cruzamentos" value={editingUser.spiritual?.quimbandaCruzamentos} onChange={(v) => updateSpiritual('quimbandaCruzamentos', v)} />
+                    {renderDynamicList('quimbandaCruzamentos', 'Cortes', '#ff4c4c')}
                     <Input label="Assentamentos" value={editingUser.spiritual?.quimbandaAssentamentos} onChange={(v) => updateSpiritual('quimbandaAssentamentos', v)} />
                     <Input label="Kaballah ou Aprontamento" value={editingUser.spiritual?.quimbandaKaballah} onChange={(v) => updateSpiritual('quimbandaKaballah', v)} />
                     
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Observações</label>
-                      <textarea className="search-input glass-panel" rows={3} style={{ width: '100%', padding: '0.8rem', border: '1px solid var(--glass-border)', marginTop: '0.5rem' }} value={editingUser.spiritual?.quimbandaObs} onChange={(e) => updateSpiritual('quimbandaObs', e.target.value)} />
-                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>{renderDynamicList('quimbandaObs', 'Observações', '#ff4c4c')}</div>
                   </div>
                 </motion.div>
               )}
@@ -979,29 +1094,53 @@ export default function Members() {
                         )}
                       </div>
                     </div>
-                    <Input label="Entidade de Cabeça / Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCabeca} onChange={(v) => { updateSpiritual('nacaoObrigaCabeca', v); setEditingUser(prev => prev ? { ...prev, nomeDeSanto: v } : null); }} />
-                    <Input label="Entidade de Corpo / Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCorpo} onChange={(v) => updateSpiritual('nacaoObrigaCorpo', v)} />
-                    <Input label="Obrigação de Pés" value={editingUser.spiritual?.nacaoObrigaPes} onChange={(v) => updateSpiritual('nacaoObrigaPes', v)} />
+                    <Input label="Orixá de Cabeça / Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCabeca} onChange={(v) => { updateSpiritual('nacaoObrigaCabeca', v); setEditingUser(prev => prev ? { ...prev, nomeDeSanto: v } : null); }} />
+                    <Input label="Orixá de Corpo / Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCorpo} onChange={(v) => updateSpiritual('nacaoObrigaCorpo', v)} />
+                    <Input label="Orixá de Pés" value={editingUser.spiritual?.nacaoObrigaPes} onChange={(v) => updateSpiritual('nacaoObrigaPes', v)} />
                     <Input label="Passagem" value={editingUser.spiritual?.nacaoPassagem} onChange={(v) => updateSpiritual('nacaoPassagem', v)} />
-                    
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Observações</label>
-                      <textarea className="search-input glass-panel" rows={3} style={{ width: '100%', padding: '0.8rem', border: '1px solid var(--glass-border)', marginTop: '0.5rem' }} value={editingUser.spiritual?.nacaoObs} onChange={(e) => updateSpiritual('nacaoObs', e.target.value)} />
-                    </div>
-                  </div>
-                </motion.div>
-              )}
 
-              {activeTab === 'obrigacoes' && (
-                <motion.div key="obrigacoes" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                  <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.8rem', marginBottom: '1.5rem', color: 'var(--neon-purple)' }}>Cronograma de Obrigações</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    {[0, 1, 2].map(idx => (
-                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'minmax(150px, 200px) 1fr', gap: '1rem', padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: 12, border: '1px solid var(--glass-border)' }}>
-                        <Input label={`Data ${idx + 1}`} type="date" value={editingUser.spiritual?.obrigacoes[idx]?.data} onChange={(v) => updateObrigacao(idx, 'data', v)} />
-                        <Input label={`Obrigação ${idx + 1}`} value={editingUser.spiritual?.obrigacoes[idx]?.descricao} onChange={(v) => updateObrigacao(idx, 'descricao', v)} />
+                    <div style={{ gridColumn: '1 / -1' }}>{renderDynamicList('nacaoObs', 'Observações', 'var(--accent-gold)')}</div>
+
+                    {/* Calendário de Obrigações */}
+                    <div style={{ gridColumn: '1 / -1', marginTop: '1.5rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.6rem', marginBottom: '1.2rem' }}>
+                        <h4 style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '0.95rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Calendar size={16} /> Calendário de Obrigações
+                        </h4>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => updateSpiritual('obrigacoes', [...(editingUser.spiritual?.obrigacoes || []), { data: '', descricao: '' }])}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.9rem', borderRadius: 8, border: '1px solid var(--accent-gold)', background: 'rgba(255,215,0,0.08)', color: 'var(--accent-gold)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700 }}
+                          >
+                            <Plus size={14} /> Nova Obrigação
+                          </button>
+                        )}
                       </div>
-                    ))}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                        {(editingUser.spiritual?.obrigacoes || []).map((obrig, idx) => (
+                          <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 180px) 1fr auto', gap: '0.8rem', padding: '0.9rem', background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid var(--glass-border)', alignItems: 'end' }}>
+                            <Input label={`Data ${idx + 1}`} type="date" value={obrig.data} onChange={(v) => updateObrigacao(idx, 'data', v)} />
+                            <Input label={`Obrigação ${idx + 1}`} value={obrig.descricao} onChange={(v) => updateObrigacao(idx, 'descricao', v)} />
+                            {canEdit && (editingUser.spiritual?.obrigacoes || []).length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => updateSpiritual('obrigacoes', (editingUser.spiritual?.obrigacoes || []).filter((_, i) => i !== idx))}
+                                title="Remover obrigação"
+                                style={{ padding: '0.45rem', borderRadius: 8, border: '1px solid rgba(255,76,76,0.3)', background: 'rgba(255,76,76,0.08)', color: '#ff4c4c', cursor: 'pointer', display: 'flex', alignItems: 'center', marginBottom: '0.1rem' }}
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        {(editingUser.spiritual?.obrigacoes || []).length === 0 && (
+                          <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', border: '1px dashed var(--glass-border)', borderRadius: 12 }}>
+                            Nenhuma obrigação registrada. Clique em "Nova Obrigação" para adicionar.
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -1043,7 +1182,7 @@ export default function Members() {
                   if (currentIndex > 0) setActiveTab(tabs[currentIndex - 1].id);
                 }} style={{ background: 'transparent', color: '#fff', border: '1px solid var(--glass-border)', padding: '0.8rem 1.5rem', borderRadius: 8, cursor: 'pointer' }}>Anterior</button>}
                 
-                {activeTab !== 'obrigacoes' && <button type="button" onClick={() => {
+                {getAvailableTabs().findIndex(t => t.id === activeTab) < getAvailableTabs().length - 1 && <button type="button" onClick={() => {
                   const tabs = getAvailableTabs();
                   const currentIndex = tabs.findIndex(t => t.id === activeTab);
                   if (currentIndex < tabs.length - 1) setActiveTab(tabs[currentIndex + 1].id);

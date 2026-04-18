@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { Calendar as CalendarIcon, Plus, Edit, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 function DateTimeInputField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const dtRef = useRef<HTMLInputElement>(null);
@@ -82,6 +83,7 @@ export default function Events() {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
+  const [deleteEventModal, setDeleteEventModal] = useState<{ isOpen: boolean; eventId: string; eventTitle: string }>({ isOpen: false, eventId: '', eventTitle: '' });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,10 +115,8 @@ export default function Events() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este evento?')) {
-      await deleteEvent(id);
-    }
+  const handleDelete = (id: string, eventTitle: string) => {
+    setDeleteEventModal({ isOpen: true, eventId: id, eventTitle });
   };
 
   const handleCloseForm = () => {
@@ -213,7 +213,7 @@ export default function Events() {
                       <Edit size={18} />
                     </button>
                     <button 
-                      onClick={() => handleDelete(evt.id)}
+                      onClick={() => handleDelete(evt.id, evt.title)}
                       title="Excluir"
                       style={{ background: 'none', border: 'none', color: 'rgba(255, 100, 100, 0.7)', cursor: 'pointer', padding: '0.5rem' }}
                     >
@@ -237,6 +237,22 @@ export default function Events() {
           ))
         )}
       </div>
+
+      <ConfirmationModal
+        isOpen={deleteEventModal.isOpen}
+        onClose={() => setDeleteEventModal({ isOpen: false, eventId: '', eventTitle: '' })}
+        onConfirm={async () => {
+          try {
+            await deleteEvent(deleteEventModal.eventId);
+          } catch {
+            alert('Erro ao excluir o evento. Verifique sua conexão e tente novamente.');
+          }
+        }}
+        title="Excluir Evento"
+        message={`Tem certeza que deseja excluir o evento "${deleteEventModal.eventTitle}"? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        variant="danger"
+      />
     </motion.div>
   );
 }

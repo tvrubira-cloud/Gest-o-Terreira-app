@@ -20,18 +20,18 @@ export interface SpiritualData {
   umbandaObrigaCabeca: string;
   umbandaObrigaCorpo: string;
   umbandaObs: string;
-  umbandaAnteriorMata: string;
-  umbandaAnteriorMar: string;
-  umbandaAnteriorEntidades: string;
-  umbandaAnteriorCaboclo: string;
-  umbandaAnteriorPretoVelho: string;
+  umbandaAnteriorMata: string[];
+  umbandaAnteriorMar: string[];
+  umbandaAnteriorEntidades: string[];
+  umbandaAnteriorCaboclo: string[];
+  umbandaAnteriorPretoVelho: string[];
 
   // Quimbanda
   quimbandaOrigem: string;
   quimbandaObrigaFrente: string;
   quimbandaObrigaCompanheiro: string;
-  quimbandaObs: string;
-  quimbandaCruzamentos: string;
+  quimbandaObs: string[];
+  quimbandaCruzamentos: string[];
   quimbandaAssentamentos: string;
   quimbandaKaballah: string;
 
@@ -41,7 +41,7 @@ export interface SpiritualData {
   nacaoObrigaCorpo: string;
   nacaoObrigaPes: string;
   nacaoPassagem: string;
-  nacaoObs: string;
+  nacaoObs: string[];
 
   // Cronograma
   obrigacoes: { data: string; descricao: string }[];
@@ -76,16 +76,16 @@ export const defaultSpiritualData: SpiritualData = {
   umbandaObrigaCabeca: '',
   umbandaObrigaCorpo: '',
   umbandaObs: '',
-  umbandaAnteriorMata: '',
-  umbandaAnteriorMar: '',
-  umbandaAnteriorEntidades: '',
-  umbandaAnteriorCaboclo: '',
-  umbandaAnteriorPretoVelho: '',
+  umbandaAnteriorMata: [],
+  umbandaAnteriorMar: [],
+  umbandaAnteriorEntidades: [],
+  umbandaAnteriorCaboclo: [],
+  umbandaAnteriorPretoVelho: [],
   quimbandaOrigem: '',
   quimbandaObrigaFrente: '',
   quimbandaObrigaCompanheiro: '',
-  quimbandaObs: '',
-  quimbandaCruzamentos: '',
+  quimbandaObs: [],
+  quimbandaCruzamentos: [],
   quimbandaAssentamentos: '',
   quimbandaKaballah: '',
   nacaoOrigem: '',
@@ -93,7 +93,7 @@ export const defaultSpiritualData: SpiritualData = {
   nacaoObrigaCorpo: '',
   nacaoObrigaPes: '',
   nacaoPassagem: '',
-  nacaoObs: '',
+  nacaoObs: [],
   obrigacoes: [
     { data: '', descricao: '' },
     { data: '', descricao: '' },
@@ -172,6 +172,7 @@ export interface BankAccount {
   id: string;
   terreiroId: string;
   bankName: string;
+  bankCode?: string;
   agency: string;
   accountNumber: string;
   accountType: 'Corrente' | 'Poupança';
@@ -368,6 +369,7 @@ function dbToBankAccount(row: any): BankAccount {
     id: row.id,
     terreiroId: row.terreiro_id,
     bankName: row.bank_name,
+    bankCode: row.bank_code || '',
     agency: row.agency || '',
     accountNumber: row.account_number || '',
     accountType: row.account_type as 'Corrente' | 'Poupança',
@@ -1190,10 +1192,12 @@ export const useStore = create<AppState>()((set, get) => ({
   deleteEvent: async (id) => {
     set({ isLoading: true });
     try {
-      await supabase.from('events').delete().eq('id', id);
-      set({
-        events: get().events.filter(e => e.id !== id),
-      });
+      const { error } = await supabase.from('events').delete().eq('id', id);
+      if (error) throw error;
+      set({ events: get().events.filter(e => e.id !== id) });
+    } catch (err) {
+      console.error('Erro ao excluir evento:', err);
+      throw err;
     } finally {
       set({ isLoading: false });
     }
@@ -1488,8 +1492,12 @@ export const useStore = create<AppState>()((set, get) => ({
   deleteCharge: async (id) => {
     set({ isLoading: true });
     try {
-      await supabase.from('charges').delete().eq('id', id);
+      const { error } = await supabase.from('charges').delete().eq('id', id);
+      if (error) throw error;
       set({ charges: get().charges.filter(c => c.id !== id) });
+    } catch (err) {
+      console.error('Erro ao excluir cobrança:', err);
+      throw err;
     } finally {
       set({ isLoading: false });
     }
@@ -1507,6 +1515,7 @@ export const useStore = create<AppState>()((set, get) => ({
         .insert({
           terreiro_id: currentTerreiroId,
           bank_name: accountData.bankName,
+          bank_code: accountData.bankCode || '',
           agency: accountData.agency || '',
           account_number: accountData.accountNumber || '',
           account_type: accountData.accountType || 'Corrente',
@@ -1530,6 +1539,7 @@ export const useStore = create<AppState>()((set, get) => ({
     try {
       const updateData: any = {};
       if (data.bankName !== undefined) updateData.bank_name = data.bankName;
+      if (data.bankCode !== undefined) updateData.bank_code = data.bankCode;
       if (data.agency !== undefined) updateData.agency = data.agency;
       if (data.accountNumber !== undefined) updateData.account_number = data.accountNumber;
       if (data.accountType !== undefined) updateData.account_type = data.accountType;

@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { supabase } from '../lib/supabase';
-import { Upload, Save, Building, Trash2, AlertTriangle, X, CheckCircle2, MessageCircle, Wifi, WifiOff, Loader2 } from 'lucide-react';
-import { checkEvolutionConnection, createEvolutionInstance, getEvolutionQrCode } from '../utils/evolutionApi';
+import { Upload, Save, Building, Trash2, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { uploadImage } from '../utils/uploadImage';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,83 +19,6 @@ export default function Settings() {
   const [pixKey, setPixKey] = useState(currentTerreiro?.pixKey || '');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
-
-  const EVOLUTION_URL = import.meta.env.VITE_EVOLUTION_URL || '';
-  const EVOLUTION_KEY = import.meta.env.VITE_EVOLUTION_KEY || '';
-  const evolutionInstance = currentTerreiro ? `orum-${currentTerreiro.id}` : '';
-
-  const [evolutionStatus, setEvolutionStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
-  const [showQrModal, setShowQrModal] = useState(false);
-  const [qrCode, setQrCode] = useState('');
-  const [qrError, setQrError] = useState('');
-  const [isGeneratingQr, setIsGeneratingQr] = useState(false);
-  const [qrConnected, setQrConnected] = useState(false);
-
-  useEffect(() => {
-    if (!EVOLUTION_URL || !EVOLUTION_KEY || !evolutionInstance) return;
-    checkEvolutionConnection({ url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: evolutionInstance })
-      .then(result => {
-        if (result.connected) {
-          setEvolutionStatus('ok');
-        } else {
-          setEvolutionStatus('error');
-          
-        }
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleGenerateQr = async () => {
-    if (!EVOLUTION_URL || !EVOLUTION_KEY || !evolutionInstance) {
-
-      setEvolutionStatus('error');
-      return;
-    }
-    setIsGeneratingQr(true);
-    setShowQrModal(true);
-    setQrCode('');
-    setQrError('');
-    setQrConnected(false);
-    const config = { url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: evolutionInstance };
-    const created = await createEvolutionInstance(config);
-    if (!created.success) {
-      setIsGeneratingQr(false);
-      setQrError(`Erro ao criar instância: ${created.error}`);
-      return;
-    }
-    const result = await getEvolutionQrCode(config);
-    setIsGeneratingQr(false);
-    if (result.qrcode) {
-      setQrCode(result.qrcode);
-      let tries = 0;
-      const interval = setInterval(async () => {
-        tries++;
-        const state = await checkEvolutionConnection(config);
-        if (state.connected) {
-          setQrConnected(true);
-          setEvolutionStatus('ok');
-          clearInterval(interval);
-        }
-        if (tries >= 12) clearInterval(interval);
-      }, 5000);
-    } else {
-
-      setEvolutionStatus('error');
-      setQrError(result.error || 'Erro ao gerar QR Code.');
-    }
-  };
-
-  const handleTestEvolution = async () => {
-    setEvolutionStatus('checking');
-
-    const result = await checkEvolutionConnection({ url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: evolutionInstance });
-    if (result.connected) {
-      setEvolutionStatus('ok');
-    } else {
-      setEvolutionStatus('error');
-      
-    }
-  };
 
   // Import flow
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -431,102 +353,6 @@ export default function Settings() {
               )}
             </AnimatePresence>
           </div>
-
-          {/* Evolution API */}
-          <div className="panel glass-panel" style={{ padding: '2rem', borderRadius: 'var(--panel-radius)', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid rgba(37,211,102,0.25)' }}>
-            <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#25d366' }}>
-              <MessageCircle size={20} /> WhatsApp
-            </h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-              Conecte o WhatsApp do seu terreiro para enviar mensagens automáticas de aniversário e comunicados aos membros.
-            </p>
-
-            {evolutionStatus === 'idle' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.6rem 1rem', background: 'rgba(255,255,255,0.04)', borderRadius: 8 }}>
-                <WifiOff size={16} /> WhatsApp não conectado
-              </div>
-            )}
-            {evolutionStatus === 'checking' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ffb432', fontSize: '0.85rem', padding: '0.6rem 1rem', background: 'rgba(255,180,50,0.08)', borderRadius: 8 }}>
-                <Loader2 size={16} className="spin" /> Verificando conexão...
-              </div>
-            )}
-            {evolutionStatus === 'ok' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#25d366', fontSize: '0.85rem', padding: '0.6rem 1rem', background: 'rgba(37,211,102,0.1)', borderRadius: 8 }}>
-                <Wifi size={16} /> WhatsApp conectado e funcionando!
-              </div>
-            )}
-            {evolutionStatus === 'error' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ff4c4c', fontSize: '0.85rem', padding: '0.6rem 1rem', background: 'rgba(255,76,76,0.1)', borderRadius: 8 }}>
-                <WifiOff size={16} /> Não conectado
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '0.8rem' }}>
-              <button
-                onClick={handleTestEvolution}
-                disabled={evolutionStatus === 'checking'}
-                className="glass-panel"
-                style={{ flex: 1, padding: '0.8rem', background: 'rgba(37,211,102,0.08)', border: '1px solid rgba(37,211,102,0.4)', color: '#25d366', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600 }}
-              >
-                {evolutionStatus === 'checking' ? <><Loader2 size={15} className="spin" /> Verificando...</> : <><Wifi size={15} /> Verificar Status</>}
-              </button>
-              <button
-                onClick={handleGenerateQr}
-                disabled={isGeneratingQr}
-                className="glass-panel glow-fx"
-                style={{ flex: 1, padding: '0.8rem', background: 'rgba(37,211,102,0.15)', border: '1px solid #25d366', color: '#25d366', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 700 }}
-              >
-                {isGeneratingQr ? <><Loader2 size={15} className="spin" /> Gerando...</> : <><MessageCircle size={15} /> Conectar WhatsApp</>}
-              </button>
-            </div>
-          </div>
-
-          {/* Modal QR Code */}
-          {showQrModal && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 10000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <div className="glass-panel" style={{ padding: '2rem', borderRadius: 16, border: '1px solid #25d366', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.2rem', maxWidth: 400, width: '95%' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                  <h3 style={{ color: '#25d366', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <MessageCircle size={20} /> Conectar WhatsApp
-                  </h3>
-                  <button onClick={() => setShowQrModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                    <X size={22} />
-                  </button>
-                </div>
-
-                {qrConnected ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '1rem' }}>
-                    <Wifi size={60} color="#25d366" />
-                    <p style={{ color: '#25d366', fontWeight: 700, fontSize: '1.1rem', textAlign: 'center' }}>WhatsApp conectado com sucesso!</p>
-                    <button onClick={() => setShowQrModal(false)} className="glass-panel glow-fx" style={{ padding: '0.8rem 2rem', background: '#25d366', color: '#000', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>Fechar</button>
-                  </div>
-                ) : isGeneratingQr ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '2rem' }}>
-                    <Loader2 size={40} color="#25d366" className="spin" />
-                    <p style={{ color: 'var(--text-muted)' }}>Gerando QR Code...</p>
-                  </div>
-                ) : qrCode ? (
-                  <>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
-                      Abra o WhatsApp → <strong>Dispositivos conectados</strong> → <strong>Conectar dispositivo</strong> → escaneie:
-                    </p>
-                    <img src={qrCode} alt="QR Code WhatsApp" style={{ width: 260, height: 260, borderRadius: 12, background: '#fff', padding: 8 }} />
-                    <p style={{ color: '#ffb432', fontSize: '0.8rem', textAlign: 'center' }}>Aguardando leitura... O QR Code expira em 60 segundos.</p>
-                    <button onClick={handleGenerateQr} style={{ background: 'none', border: 'none', color: '#25d366', cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline' }}>
-                      Gerar novo QR Code
-                    </button>
-                  </>
-                ) : qrError ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '1rem' }}>
-                    <WifiOff size={40} color="#ff4c4c" />
-                    <p style={{ color: '#ff4c4c', textAlign: 'center', fontSize: '0.85rem', wordBreak: 'break-all' }}>{qrError}</p>
-                    <button onClick={handleGenerateQr} className="glass-panel glow-fx" style={{ padding: '0.8rem 1.5rem', background: 'rgba(37,211,102,0.15)', border: '1px solid #25d366', color: '#25d366', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>Tentar novamente</button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          )}
 
           <div className="panel glass-panel" style={{ padding: '2rem', borderRadius: 'var(--panel-radius)', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid rgba(255, 76, 76, 0.3)' }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ff4c4c' }}>

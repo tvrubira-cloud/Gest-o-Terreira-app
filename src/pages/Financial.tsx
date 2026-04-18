@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import type { Charge, ChargeType, BankAccount } from '../store/useStore';
-import { DollarSign, Plus, ArrowLeft, CheckCircle, Clock, Users, Building2, AlertCircle, Landmark, Trash2, Copy, Calendar, History, TrendingUp, TrendingDown, ChevronDown, Filter } from 'lucide-react';
+import { DollarSign, Plus, ArrowLeft, CheckCircle, Clock, Users, Building2, AlertCircle, Landmark, Trash2, Copy, Calendar, History, TrendingUp, TrendingDown, ChevronDown, Filter, MessageCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { generatePixPayload } from '../utils/pix';
+import ConfirmationModal from '../components/ConfirmationModal';
+import { BANKS, findBankByCode, getBankInitials, type Bank } from '../utils/banks';
 
 export default function Financial() {
-  const { currentUser, getFilteredCharges, getMyCharges, getFilteredUsers, addCharge, deleteCharge, markChargeAsPaid, notifyPayment, terreiros, getSystemChargesForCurrentTerreiro, getSystemChargesIssuedByMaster, getCurrentTerreiro, masterPixKey, getBankAccountsForCurrentTerreiro, addBankAccount, deleteBankAccount, bankAccounts: _storeBankAccounts } = useStore();
+  const { currentUser, getFilteredCharges, getMyCharges, getFilteredUsers, addCharge, deleteCharge, markChargeAsPaid, notifyPayment, terreiros, getSystemChargesForCurrentTerreiro, getSystemChargesIssuedByMaster, getCurrentTerreiro, masterPixKey, getBankAccountsForCurrentTerreiro, addBankAccount, updateBankAccount, deleteBankAccount, bankAccounts: _storeBankAccounts } = useStore();
   const currentTerreiro = getCurrentTerreiro();
   const role = currentUser?.role?.toUpperCase();
   const isAdmin = role === 'ADMIN';
@@ -29,6 +31,7 @@ export default function Financial() {
   const charges = activeTab === 'HOUSE' ? houseCharges : systemInvoices;
   const users = getFilteredUsers();
   const targetUsers = users.filter(u => !u.isMaster && !u.isPanelAdmin);
+  const activeTargetUsers = targetUsers.filter(u => (u.spiritual?.situacaoCadastro ?? 'ativo') === 'ativo');
   const otherTerreiros = terreiros.filter(t => t.id !== currentUser?.terreiroId);
   const bankAccounts = getBankAccountsForCurrentTerreiro();
 
@@ -44,6 +47,7 @@ export default function Financial() {
   
   const [newBank, setNewBank] = useState<Partial<BankAccount>>({
     bankName: '',
+    bankCode: '',
     agency: '',
     accountNumber: '',
     accountType: 'Corrente',
@@ -53,6 +57,22 @@ export default function Financial() {
   });
 
   const [expandedChargeId, setExpandedChargeId] = useState<string | null>(null);
+  const [deleteChargeModal, setDeleteChargeModal] = useState<{ isOpen: boolean; chargeId: string; chargeTitle: string }>({ isOpen: false, chargeId: '', chargeTitle: '' });
+  const [deleteBankModal, setDeleteBankModal] = useState<{ isOpen: boolean; bankId: string; bankName: string }>({ isOpen: false, bankId: '', bankName: '' });
+  const [bankSelectorModal, setBankSelectorModal] = useState<{ isOpen: boolean; targetId: string }>({ isOpen: false, targetId: '' });
+  const [bankSearch, setBankSearch] = useState('');
+
+  const openWhatsApp = (phone: string, message?: string) => {
+    const cleaned = phone.replace(/\D/g, '');
+    if (!cleaned) return;
+    const number = cleaned.startsWith('55') ? cleaned : `55${cleaned}`;
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const text = message ? `&text=${encodeURIComponent(message)}` : '';
+    const url = isMobile
+      ? `whatsapp://send?phone=${number}${text}`
+      : `https://web.whatsapp.com/send?phone=${number}${text}`;
+    window.open(url, '_blank');
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -95,7 +115,7 @@ export default function Financial() {
     e.preventDefault();
     await addBankAccount(newBank as any);
     setView('LIST');
-    setNewBank({ bankName: '', agency: '', accountNumber: '', accountType: 'Corrente', ownerName: '', ownerDocument: '', pixKey: '' });
+    setNewBank({ bankName: '', bankCode: '', agency: '', accountNumber: '', accountType: 'Corrente', ownerName: '', ownerDocument: '', pixKey: '' });
   };
 
   return (
@@ -231,24 +251,48 @@ export default function Financial() {
                 <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Nenhuma conta bancária cadastrada.</p>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
-                  {bankAccounts.map(bank => (
-                    <div key={bank.id} className="glass-panel" style={{ padding: '1.5rem', borderRadius: 12, borderTop: '3px solid #e2b714', position: 'relative' }}>
+                  {bankAccounts.map(bank => {
+                    const linkedBank = bank.bankCode ? findBankByCode(bank.bankCode) : undefined;
+                    const accentColor = linkedBank?.color || '#e2b714';
+                    return (
+                    <div key={bank.id} className="glass-panel" style={{ padding: '1.5rem', borderRadius: 12, borderTop: `3px solid ${accentColor}`, position: 'relative' }}>
                       {canManageFinancial && (
-                        <button 
-                          onClick={() => { if(confirm('Excluir conta bancária?')) deleteBankAccount(bank.id); }}
+                        <button
+                          onClick={() => setDeleteBankModal({ isOpen: true, bankId: bank.id, bankName: bank.bankName })}
                           style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'transparent', border: 'none', color: '#ff4c4c', cursor: 'pointer' }}
                         >
                           <Trash2 size={18} />
                         </button>
                       )}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
-                        <div style={{ background: 'rgba(226, 183, 20, 0.1)', padding: '0.8rem', borderRadius: '50%' }}>
-                          <Landmark size={24} color="#e2b714" />
-                        </div>
-                        <div>
+                        {linkedBank ? (
+                          <div style={{ width: 44, height: 44, borderRadius: '50%', background: linkedBank.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                            {getBankInitials(linkedBank.name)}
+                          </div>
+                        ) : (
+                          <div style={{ background: 'rgba(226,183,20,0.1)', padding: '0.7rem', borderRadius: '50%' }}>
+                            <Landmark size={24} color="#e2b714" />
+                          </div>
+                        )}
+                        <div style={{ flex: 1 }}>
                           <strong style={{ display: 'block', fontSize: '1.1rem' }}>{bank.bankName}</strong>
                           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Conta {bank.accountType}</span>
                         </div>
+                      </div>
+                      {/* Ações do banco */}
+                      <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                        {linkedBank ? (
+                          <a href={linkedBank.url} target="_blank" rel="noopener noreferrer"
+                            style={{ padding: '0.4rem 0.9rem', borderRadius: 8, fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', border: `1px solid ${linkedBank.color}`, background: `${linkedBank.color}18`, color: linkedBank.color, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            🌐 Internet Banking
+                          </a>
+                        ) : null}
+                        {canManageFinancial && (
+                          <button onClick={() => setBankSelectorModal({ isOpen: true, targetId: bank.id })}
+                            style={{ padding: '0.4rem 0.9rem', borderRadius: 8, fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'var(--text-muted)' }}>
+                            {linkedBank ? '🔄 Alterar Banco' : '🔗 Vincular Banco'}
+                          </button>
+                        )}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.9rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-muted)' }}>Agência:</span> <strong>{bank.agency}</strong></div>
@@ -270,7 +314,8 @@ export default function Financial() {
                         )}
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               )
             ) : charges.length === 0 ? (
@@ -302,11 +347,9 @@ export default function Financial() {
                         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
                           {canManageFinancial && (
                             <button
-                              onClick={async (e) => {
+                              onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm(`Excluir a cobrança "${charge.title}"?`)) {
-                                  await deleteCharge(charge.id);
-                                }
+                                setDeleteChargeModal({ isOpen: true, chargeId: charge.id, chargeTitle: charge.title });
                               }}
                               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ff4c4c', padding: '0.3rem', display: 'flex', alignItems: 'center' }}
                               title="Excluir cobrança"
@@ -372,6 +415,21 @@ export default function Financial() {
                                   const hasNotified = (charge.notifiedBy || []).includes(id);
                                   if (!entity) return null;
 
+                                  const memberPhone = !('name' in entity) ? ((entity as any).whatsapp || (entity as any).telefone || '') : '';
+                                  const isActiveMember = !('name' in entity) && ((entity as any).spiritual?.situacaoCadastro ?? 'ativo') === 'ativo';
+                                  const memberFirstName = !('name' in entity) ? (entity as any).nomeCompleto.split(' ')[0] : '';
+                                  const chargeMsg = [
+                                    `Olá${memberFirstName ? `, ${memberFirstName}` : ''}! 👋`,
+                                    ``,
+                                    `Segue o lembrete de cobrança do *${currentTerreiro?.name || 'Terreiro'}*:`,
+                                    ``,
+                                    `📋 *${charge.title}*`,
+                                    `💰 Valor: *${formatCurrency(charge.amount)}*`,
+                                    `📅 Vencimento: *${new Date(charge.dueDate).toLocaleDateString('pt-BR')}*`,
+                                    charge.description ? `📝 ${charge.description}` : '',
+                                    ``,
+                                    `Em caso de dúvidas, entre em contato conosco. 🙏`,
+                                  ].filter(Boolean).join('\n');
                                   return (
                                     <div key={id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: 6, border: `1px solid ${hasPaid ? 'rgba(0,255,136,0.3)' : (hasNotified ? 'rgba(255, 204, 0, 0.3)' : 'transparent')}` }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -379,16 +437,27 @@ export default function Financial() {
                                         <span style={{ fontSize: '0.9rem', color: hasNotified && !hasPaid ? '#ffcc00' : '#fff' }}>{'name' in entity ? entity.name : entity.nomeCompleto}</span>
                                         {hasNotified && !hasPaid && <span style={{ fontSize: '0.6rem', background: '#ffcc00', color: '#000', padding: '0.1rem 0.3rem', borderRadius: 4 }}>NOTIFICOU</span>}
                                       </div>
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); markChargeAsPaid(charge.id, id, !hasPaid); }}
-                                        style={{
-                                          padding: '0.3rem 0.6rem', borderRadius: 4, border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold',
-                                          background: hasPaid ? 'transparent' : (hasNotified ? '#ffcc00' : 'rgba(0, 240, 255, 0.15)'),
-                                          color: hasPaid ? 'var(--text-muted)' : (hasNotified ? '#000' : 'var(--neon-cyan)')
-                                        }}
-                                      >
-                                        {hasPaid ? 'Desfazer' : (hasNotified ? 'CONFIRMAR' : 'Marcar Pago')}
-                                      </button>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        {isActiveMember && memberPhone && (
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); openWhatsApp(memberPhone, chargeMsg); }}
+                                            title="Enviar cobrança via WhatsApp"
+                                            style={{ padding: '0.25rem 0.5rem', borderRadius: 4, border: '1px solid rgba(37,211,102,0.4)', background: 'rgba(37,211,102,0.1)', color: '#25d366', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                          >
+                                            <MessageCircle size={13} />
+                                          </button>
+                                        )}
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); markChargeAsPaid(charge.id, id, !hasPaid); }}
+                                          style={{
+                                            padding: '0.3rem 0.6rem', borderRadius: 4, border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold',
+                                            background: hasPaid ? 'transparent' : (hasNotified ? '#ffcc00' : 'rgba(0, 240, 255, 0.15)'),
+                                            color: hasPaid ? 'var(--text-muted)' : (hasNotified ? '#000' : 'var(--neon-cyan)')
+                                          }}
+                                        >
+                                          {hasPaid ? 'Desfazer' : (hasNotified ? 'CONFIRMAR' : 'Marcar Pago')}
+                                        </button>
+                                      </div>
                                     </div>
                                   );
                                 })}
@@ -740,13 +809,12 @@ export default function Financial() {
                       const statusColor = s.overdue > 0 ? '#ff4c4c' : s.pending > 0 ? '#ffcc00' : '#00ff88';
                       return (
                         <div key={s.user.id}
-                          onClick={() => setSelectedMemberId(s.user.id)}
-                          style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto', alignItems: 'center', gap: '1rem', padding: '0.8rem 1rem', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: `1px solid ${s.overdue > 0 ? 'rgba(255,76,76,0.25)' : s.pending === 0 ? 'rgba(0,255,136,0.15)' : 'rgba(255,255,255,0.05)'}`, cursor: 'pointer', transition: 'background 0.15s' }}
+                          style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto', alignItems: 'center', gap: '1rem', padding: '0.8rem 1rem', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: `1px solid ${s.overdue > 0 ? 'rgba(255,76,76,0.25)' : s.pending === 0 ? 'rgba(0,255,136,0.15)' : 'rgba(255,255,255,0.05)'}`, transition: 'background 0.15s' }}
                           onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
                           onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}>
 
                           {/* Nome */}
-                          <div>
+                          <div onClick={() => setSelectedMemberId(s.user.id)} style={{ cursor: 'pointer' }}>
                             <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{s.user.nomeCompleto}</div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{s.user.nomeDeSanto || '—'} • {s.total} cobrança(s)</div>
                             {/* Barra de progresso */}
@@ -775,8 +843,23 @@ export default function Financial() {
                             <div style={{ color: s.overdue > 0 ? '#ff4c4c' : 'var(--text-muted)', fontWeight: 'bold', fontSize: '0.9rem' }}>{s.overdue > 0 ? formatCurrency(s.totalOverdue) : '—'}</div>
                           </div>
 
+                          {/* WhatsApp — somente ativo com número */}
+                          {(() => {
+                            const isActive = (s.user.spiritual?.situacaoCadastro ?? 'ativo') === 'ativo';
+                            const phone = s.user.whatsapp || s.user.telefone || '';
+                            return isActive && phone ? (
+                              <button
+                                onClick={() => openWhatsApp(phone)}
+                                title="Abrir WhatsApp"
+                                style={{ padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(37,211,102,0.4)', background: 'rgba(37,211,102,0.1)', color: '#25d366', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                              >
+                                <MessageCircle size={15} />
+                              </button>
+                            ) : <div style={{ width: 30 }} />;
+                          })()}
+
                           {/* Seta */}
-                          <ChevronDown size={16} style={{ color: 'var(--text-muted)' }} />
+                          <ChevronDown size={16} onClick={() => setSelectedMemberId(s.user.id)} style={{ color: 'var(--text-muted)', cursor: 'pointer' }} />
                         </div>
                       );
                     })}
@@ -823,7 +906,7 @@ export default function Financial() {
                 {activeTab === 'SYSTEM' ? <><Building2 size={20} /> Terreiros para Cobrança</> : <><Users size={20} /> Membros Selecionados</>}
               </h3>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button type="button" onClick={() => setNewCharge({...newCharge, assignedTo: (activeTab === 'SYSTEM' ? otherTerreiros : targetUsers).map(u => u.id)})} className="glass-panel" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', borderRadius: 4 }}>
+                <button type="button" onClick={() => setNewCharge({...newCharge, assignedTo: (activeTab === 'SYSTEM' ? otherTerreiros : activeTargetUsers).map(u => u.id)})} className="glass-panel" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', borderRadius: 4 }}>
                   Selecionar Todos
                 </button>
                 <button type="button" onClick={() => setNewCharge({...newCharge, assignedTo: []})} className="glass-panel" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', cursor: 'pointer', background: 'transparent', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4 }}>
@@ -833,7 +916,7 @@ export default function Financial() {
             </div>
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.8rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', padding: '1rem', borderRadius: 8 }}>
-              {(activeTab === 'SYSTEM' ? otherTerreiros : targetUsers).map(entity => {
+              {(activeTab === 'SYSTEM' ? otherTerreiros : activeTargetUsers).map(entity => {
                 const isSelected = newCharge.assignedTo?.includes(entity.id);
                 const name = 'name' in entity ? entity.name : entity.nomeCompleto;
                 return (
@@ -845,7 +928,7 @@ export default function Financial() {
                   </div>
                 );
               })}
-              {(activeTab === 'SYSTEM' ? otherTerreiros : targetUsers).length === 0 && (
+              {(activeTab === 'SYSTEM' ? otherTerreiros : activeTargetUsers).length === 0 && (
                 <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>Nenhum alvo cadastrado plataforma.</div>
               )}
             </div>
@@ -869,7 +952,25 @@ export default function Financial() {
               <Landmark size={20} /> Cadastrar Conta Bancária
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
-              <Input label="Banco" placeholder="Ex: Nubank, Itaú, Banco do Brasil" value={newBank.bankName} onChange={v => setNewBank({...newBank, bankName: v})} required />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ color: 'var(--text-muted)' }}>Banco <span style={{ color: 'var(--neon-purple)' }}>*</span></label>
+                {newBank.bankCode ? (() => {
+                  const b = findBankByCode(newBank.bankCode!);
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.7rem 1rem', border: `1px solid ${b?.color || 'var(--glass-border)'}`, borderRadius: 8, background: `${b?.color || '#fff'}18` }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: b?.color || '#ccc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                        {getBankInitials(newBank.bankName || '')}
+                      </div>
+                      <span style={{ fontWeight: 600, color: b?.color || 'var(--text-main)', flex: 1 }}>{newBank.bankName}</span>
+                      <button type="button" onClick={() => { setNewBank({ ...newBank, bankName: '', bankCode: '' }); setBankSelectorModal({ isOpen: true, targetId: 'form' }); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.78rem', textDecoration: 'underline' }}>Alterar</button>
+                    </div>
+                  );
+                })() : (
+                  <button type="button" onClick={() => setBankSelectorModal({ isOpen: true, targetId: 'form' })} style={{ padding: '0.8rem 1rem', border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 8, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', textAlign: 'left', fontSize: '0.9rem' }}>
+                    🏦 Selecionar banco...
+                  </button>
+                )}
+              </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <label style={{ color: 'var(--text-muted)' }}>Tipo de Conta <span style={{ color: 'var(--neon-purple)' }}>*</span></label>
@@ -899,6 +1000,92 @@ export default function Financial() {
           </div>
         </form>
       )}
+
+      {/* Modal seletor de banco */}
+      {bankSelectorModal.isOpen && (() => {
+        const filtered = BANKS.filter(b =>
+          !bankSearch || b.name.toLowerCase().includes(bankSearch.toLowerCase()) || b.code.includes(bankSearch)
+        );
+        const handleSelectBank = async (bank: Bank) => {
+          if (bankSelectorModal.targetId === 'form') {
+            setNewBank(prev => ({ ...prev, bankName: bank.name, bankCode: bank.code }));
+          } else {
+            await updateBankAccount(bankSelectorModal.targetId, { bankName: bank.name, bankCode: bank.code });
+          }
+          setBankSelectorModal({ isOpen: false, targetId: '' });
+          setBankSearch('');
+        };
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 10000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1rem' }}>
+            <div className="glass-panel" style={{ width: '100%', maxWidth: 560, maxHeight: '85vh', borderRadius: 16, border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ padding: '1.2rem 1.5rem', borderBottom: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>🏦 Selecionar Banco</h3>
+                <button onClick={() => { setBankSelectorModal({ isOpen: false, targetId: '' }); setBankSearch(''); }}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem' }}>✕</button>
+              </div>
+              <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Buscar banco pelo nome ou código BACEN..."
+                  value={bankSearch}
+                  onChange={e => setBankSearch(e.target.value)}
+                  style={{ width: '100%', padding: '0.7rem 1rem', borderRadius: 8, border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ overflowY: 'auto', padding: '1rem 1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '0.7rem' }}>
+                {filtered.length === 0 ? (
+                  <p style={{ gridColumn: '1/-1', color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Nenhum banco encontrado.</p>
+                ) : filtered.map(bank => (
+                  <button key={bank.code} onClick={() => handleSelectBank(bank)}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', padding: '0.9rem 0.5rem', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', cursor: 'pointer', transition: 'all 0.15s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${bank.color}22`; (e.currentTarget as HTMLElement).style.borderColor = bank.color; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+                  >
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: bank.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 800, color: '#fff' }}>
+                      {getBankInitials(bank.name)}
+                    </div>
+                    <span style={{ fontSize: '0.72rem', textAlign: 'center', color: 'var(--text-main)', lineHeight: 1.3 }}>{bank.name}</span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Cód. {bank.code}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      <ConfirmationModal
+        isOpen={deleteChargeModal.isOpen}
+        onClose={() => setDeleteChargeModal({ isOpen: false, chargeId: '', chargeTitle: '' })}
+        onConfirm={async () => {
+          try {
+            await deleteCharge(deleteChargeModal.chargeId);
+          } catch {
+            alert('Erro ao excluir a cobrança. Verifique sua conexão e tente novamente.');
+          }
+        }}
+        title="Excluir Cobrança"
+        message={`Tem certeza que deseja excluir a cobrança "${deleteChargeModal.chargeTitle}"? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={deleteBankModal.isOpen}
+        onClose={() => setDeleteBankModal({ isOpen: false, bankId: '', bankName: '' })}
+        onConfirm={async () => {
+          try {
+            await deleteBankAccount(deleteBankModal.bankId);
+          } catch {
+            alert('Erro ao excluir a conta bancária. Verifique sua conexão e tente novamente.');
+          }
+        }}
+        title="Excluir Conta Bancária"
+        message={`Tem certeza que deseja excluir a conta "${deleteBankModal.bankName}"? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        variant="danger"
+      />
     </motion.div>
   );
 }
