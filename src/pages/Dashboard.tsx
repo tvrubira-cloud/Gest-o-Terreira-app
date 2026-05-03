@@ -168,7 +168,7 @@ export default function Dashboard() {
         )}
       </motion.div>
 
-      {isStaff && birthdaysThisMonth.length > 0 && (
+      {isStaff && (
         <motion.div variants={itemVariants} className="glass-panel" style={{ padding: '1.5rem', borderRadius: 'var(--panel-radius)', border: `1px solid ${birthdaysThisMonth.some(b => b.isToday) ? '#ff80bf' : 'rgba(255,180,100,0.3)'}`, background: birthdaysThisMonth.some(b => b.isToday) ? 'rgba(255,100,180,0.06)' : 'rgba(255,180,50,0.04)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem' }}>
@@ -184,36 +184,45 @@ export default function Dashboard() {
               </button>
             )}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
-            {displayedBirthdays.map(u => (
-              <div key={u.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.8rem 1rem', borderRadius: 10, background: u.isToday ? 'rgba(255,100,180,0.1)' : 'rgba(255,255,255,0.02)', border: `1px solid ${u.isToday ? 'rgba(255,100,180,0.4)' : 'var(--glass-border)'}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ width: 42, height: 42, borderRadius: '50%', overflow: 'hidden', border: `2px solid ${u.isToday ? '#ff80bf' : '#ffb432'}`, flexShrink: 0 }}>
-                    {u.photoUrl ? <img src={u.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>🎂</div>}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      {u.nomeCompleto}
-                      {u.isToday && <span style={{ background: '#ff80bf', color: '#000', borderRadius: 20, padding: '0.1rem 0.6rem', fontSize: '0.7rem', fontWeight: 800 }}>HOJE 🎉</span>}
+
+          {birthdaysThisMonth.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem', border: '1px dashed rgba(255,180,50,0.2)', borderRadius: 10 }}>
+              <Cake size={28} style={{ marginBottom: '0.5rem', opacity: 0.3 }} />
+              <p style={{ margin: 0 }}>Nenhum aniversariante em {today.toLocaleString('pt-BR', { month: 'long' })}.</p>
+              <p style={{ margin: '0.3rem 0 0', fontSize: '0.78rem', opacity: 0.7 }}>Verifique se a data de nascimento está preenchida nos cadastros.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+              {displayedBirthdays.map(u => (
+                <div key={u.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.8rem 1rem', borderRadius: 10, background: u.isToday ? 'rgba(255,100,180,0.1)' : 'rgba(255,255,255,0.02)', border: `1px solid ${u.isToday ? 'rgba(255,100,180,0.4)' : 'var(--glass-border)'}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ width: 42, height: 42, borderRadius: '50%', overflow: 'hidden', border: `2px solid ${u.isToday ? '#ff80bf' : '#ffb432'}`, flexShrink: 0 }}>
+                      {u.photoUrl ? <img src={u.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>🎂</div>}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      Dia {u.birthdayDay} {u.isPast && !u.isToday ? '· já passou' : ''}
+                    <div>
+                      <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        {u.nomeCompleto}
+                        {u.isToday && <span style={{ background: '#ff80bf', color: '#000', borderRadius: 20, padding: '0.1rem 0.6rem', fontSize: '0.7rem', fontWeight: 800 }}>HOJE 🎉</span>}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        Dia {u.birthdayDay} {u.isPast && !u.isToday ? '· já passou' : ''}
+                      </div>
                     </div>
                   </div>
+                  <button
+                    onClick={() => sendWhatsApp(u)}
+                    disabled={sendingBirthdayId === u.id}
+                    title={evolutionConfigured ? 'Enviar via Evolution API' : 'Abrir WhatsApp Web'}
+                    className="glass-panel glow-fx"
+                    style={{ padding: '0.5rem 1rem', background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.4)', color: '#25d366', borderRadius: 8, cursor: sendingBirthdayId === u.id ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', opacity: sendingBirthdayId === u.id ? 0.6 : 1 }}
+                  >
+                    {sendingBirthdayId === u.id ? <Loader2 size={15} className="spin" /> : <MessageCircle size={15} />}
+                    {sendingBirthdayId === u.id ? 'Enviando...' : 'Parabenizar'}
+                  </button>
                 </div>
-                <button
-                  onClick={() => sendWhatsApp(u)}
-                  disabled={sendingBirthdayId === u.id}
-                  title={evolutionConfigured ? 'Enviar via Evolution API' : 'Abrir WhatsApp Web'}
-                  className="glass-panel glow-fx"
-                  style={{ padding: '0.5rem 1rem', background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.4)', color: '#25d366', borderRadius: 8, cursor: sendingBirthdayId === u.id ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', opacity: sendingBirthdayId === u.id ? 0.6 : 1 }}
-                >
-                  {sendingBirthdayId === u.id ? <Loader2 size={15} className="spin" /> : <MessageCircle size={15} />}
-                  {sendingBirthdayId === u.id ? 'Enviando...' : 'Parabenizar'}
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </motion.div>
       )}
 
