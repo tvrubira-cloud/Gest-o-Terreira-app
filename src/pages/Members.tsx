@@ -18,7 +18,7 @@ export default function Members() {
   const [view, setView] = useState<'LIST' | 'FORM'>('LIST');
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set(['ativo']));
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [activeTab, setActiveTab] = useState<'pessoal' | 'umbanda' | 'quimbanda' | 'nacao' | 'financeiro'>('pessoal');
   const [isSaving, setIsSaving] = useState(false);
@@ -36,6 +36,7 @@ export default function Members() {
   const [showWhatsAppPanel, setShowWhatsAppPanel] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
+  const [companheiroDropdown, setCompanheiroDropdown] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
 
@@ -980,17 +981,16 @@ export default function Members() {
                         )}
                       </div>
                     </div>
-                    <Input label="Entidade de Cabeça / Pai / Mãe" value={editingUser.spiritual?.umbandaObrigaCabeca} onChange={(v) => { updateSpiritual('umbandaObrigaCabeca', v); setEditingUser(prev => prev ? { ...prev, nomeDeSanto: v } : null); }} />
-                    <Input label="Entidade de Corpo / Pai / Mãe" value={editingUser.spiritual?.umbandaObrigaCorpo} onChange={(v) => updateSpiritual('umbandaObrigaCorpo', v)} />
-                    
+                    <Input label="Entidade de Cabeça - Pai / Mãe" value={editingUser.spiritual?.umbandaObrigaCabeca} onChange={(v) => { updateSpiritual('umbandaObrigaCabeca', v); setEditingUser(prev => prev ? { ...prev, nomeDeSanto: v } : null); }} />
+                    <Input label="Entidade de Corpo - Pai / Mãe" value={editingUser.spiritual?.umbandaObrigaCorpo} onChange={(v) => updateSpiritual('umbandaObrigaCorpo', v)} />
+                    <Input label="Caboclo" value={editingUser.spiritual?.umbandaObrigaCaboclo} onChange={(v) => updateSpiritual('umbandaObrigaCaboclo', v)} />
+                    <Input label="Preto Velho" value={editingUser.spiritual?.umbandaObrigaPretoVelho} onChange={(v) => updateSpiritual('umbandaObrigaPretoVelho', v)} />
+
                     <div style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
                       <h4 style={{ color: 'var(--text-muted)', marginBottom: '1.2rem', fontSize: '0.9rem', textTransform: 'uppercase', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem' }}>Obrigações Anteriores</h4>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.2rem' }}>
                         {renderDynamicList('umbandaAnteriorMata', 'Mata', '#00f0ff')}
                         {renderDynamicList('umbandaAnteriorMar', 'Mar', '#00f0ff')}
-                        {renderDynamicList('umbandaAnteriorEntidades', 'Entidades', '#00f0ff')}
-                        {renderDynamicList('umbandaAnteriorCaboclo', 'Caboclo', '#00f0ff')}
-                        {renderDynamicList('umbandaAnteriorPretoVelho', 'Preto Velho', '#00f0ff')}
                         <div style={{ gridColumn: '1 / -1' }}>
                           <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Observações</label>
                           <textarea className="search-input glass-panel" rows={5} style={{ width: '100%', padding: '0.8rem', border: '1px solid var(--glass-border)', marginTop: '0.5rem', resize: 'vertical' }} value={editingUser.spiritual?.umbandaObs as string || ''} onChange={(e) => updateSpiritual('umbandaObs', e.target.value)} />
@@ -1041,8 +1041,43 @@ export default function Members() {
                         )}
                       </div>
                     </div>
-                    <Input label="Obrigação de Frente" value={editingUser.spiritual?.quimbandaObrigaFrente} onChange={(v) => updateSpiritual('quimbandaObrigaFrente', v)} />
-                    <Input label="Companheiro(a)" value={editingUser.spiritual?.quimbandaObrigaCompanheiro} onChange={(v) => updateSpiritual('quimbandaObrigaCompanheiro', v)} />
+                    <Input label="Exu ou Pombogira Frente" value={editingUser.spiritual?.quimbandaObrigaFrente} onChange={(v) => updateSpiritual('quimbandaObrigaFrente', v)} />
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', position: 'relative' }}>
+                      <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Exu / Pombogira Companheira</label>
+                      <button
+                        type="button"
+                        onClick={() => canEdit && setCompanheiroDropdown(p => !p)}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.7rem 0.9rem', borderRadius: 8, border: `1.5px solid ${editingUser.spiritual?.quimbandaCompanheiroTipo ? '#ff4c4c' : 'var(--glass-border)'}`, background: editingUser.spiritual?.quimbandaCompanheiroTipo ? 'rgba(255,76,76,0.1)' : 'rgba(255,255,255,0.03)', color: editingUser.spiritual?.quimbandaCompanheiroTipo ? '#ff4c4c' : 'var(--text-muted)', cursor: canEdit ? 'pointer' : 'default', fontSize: '0.85rem', fontWeight: editingUser.spiritual?.quimbandaCompanheiroTipo ? 700 : 400 }}
+                      >
+                        <span>{editingUser.spiritual?.quimbandaCompanheiroTipo || 'Selecione...'}</span>
+                        <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>{companheiroDropdown ? '▲' : '▼'}</span>
+                      </button>
+
+                      {companheiroDropdown && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--bg-primary)', border: '1px solid rgba(255,76,76,0.3)', borderRadius: 8, overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.4)', marginTop: '0.25rem' }}>
+                          {['Exu Companheiro', 'Pombogira Companheira', 'Exu / Pombogira Companheira'].map(op => (
+                            <button
+                              key={op}
+                              type="button"
+                              onClick={() => { updateSpiritual('quimbandaCompanheiroTipo', op); setCompanheiroDropdown(false); }}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.75rem 1rem', background: editingUser.spiritual?.quimbandaCompanheiroTipo === op ? 'rgba(255,76,76,0.15)' : 'transparent', color: editingUser.spiritual?.quimbandaCompanheiroTipo === op ? '#ff4c4c' : 'var(--text-main)', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: editingUser.spiritual?.quimbandaCompanheiroTipo === op ? 700 : 400 }}
+                            >
+                              {op}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <input
+                        className="search-input glass-panel"
+                        style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', borderRadius: 8, fontSize: '0.85rem' }}
+                        value={editingUser.spiritual?.quimbandaObrigaCompanheiro || ''}
+                        onChange={e => updateSpiritual('quimbandaObrigaCompanheiro', e.target.value)}
+                        placeholder="Nome do Exu / Pombogira companheiro(a)"
+                        readOnly={!canEdit}
+                      />
+                    </div>
                     {renderDynamicList('quimbandaCruzamentos', 'Cortes', '#ff4c4c')}
                     <Input label="Assentamentos" value={editingUser.spiritual?.quimbandaAssentamentos} onChange={(v) => updateSpiritual('quimbandaAssentamentos', v)} />
                     <Input label="Kaballah ou Aprontamento" value={editingUser.spiritual?.quimbandaKaballah} onChange={(v) => updateSpiritual('quimbandaKaballah', v)} />
@@ -1094,10 +1129,10 @@ export default function Members() {
                         )}
                       </div>
                     </div>
-                    <Input label="Orixá de Cabeça / Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCabeca} onChange={(v) => { updateSpiritual('nacaoObrigaCabeca', v); setEditingUser(prev => prev ? { ...prev, nomeDeSanto: v } : null); }} />
-                    <Input label="Orixá de Corpo / Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCorpo} onChange={(v) => updateSpiritual('nacaoObrigaCorpo', v)} />
-                    <Input label="Orixá de Pés" value={editingUser.spiritual?.nacaoObrigaPes} onChange={(v) => updateSpiritual('nacaoObrigaPes', v)} />
+                    <Input label="Orixá de Cabeça - Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCabeca} onChange={(v) => { updateSpiritual('nacaoObrigaCabeca', v); setEditingUser(prev => prev ? { ...prev, nomeDeSanto: v } : null); }} />
+                    <Input label="Orixá de Corpo - Pai / Mãe" value={editingUser.spiritual?.nacaoObrigaCorpo} onChange={(v) => updateSpiritual('nacaoObrigaCorpo', v)} />
                     <Input label="Passagem" value={editingUser.spiritual?.nacaoPassagem} onChange={(v) => updateSpiritual('nacaoPassagem', v)} />
+                    <Input label="Orixá de Pés" value={editingUser.spiritual?.nacaoObrigaPes} onChange={(v) => updateSpiritual('nacaoObrigaPes', v)} />
 
                     <div style={{ gridColumn: '1 / -1' }}>{renderDynamicList('nacaoObs', 'Observações', 'var(--accent-gold)')}</div>
 

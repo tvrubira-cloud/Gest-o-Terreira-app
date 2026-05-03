@@ -103,6 +103,8 @@ export default function RegisterTerreiro() {
           umbandaOrigem: '',
           umbandaObrigaCabeca: '',
           umbandaObrigaCorpo: '',
+          umbandaObrigaCaboclo: '',
+          umbandaObrigaPretoVelho: '',
           umbandaObs: '',
           umbandaAnteriorMata: [],
           umbandaAnteriorMar: [],

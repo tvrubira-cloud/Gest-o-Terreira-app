@@ -19,6 +19,8 @@ export interface SpiritualData {
   umbandaOrigem: string;
   umbandaObrigaCabeca: string;
   umbandaObrigaCorpo: string;
+  umbandaObrigaCaboclo: string;
+  umbandaObrigaPretoVelho: string;
   umbandaObs: string;
   umbandaAnteriorMata: string[];
   umbandaAnteriorMar: string[];
@@ -30,6 +32,7 @@ export interface SpiritualData {
   quimbandaOrigem: string;
   quimbandaObrigaFrente: string;
   quimbandaObrigaCompanheiro: string;
+  quimbandaCompanheiroTipo?: string;
   quimbandaObs: string[];
   quimbandaCruzamentos: string[];
   quimbandaAssentamentos: string;
@@ -75,6 +78,8 @@ export const defaultSpiritualData: SpiritualData = {
   umbandaOrigem: '',
   umbandaObrigaCabeca: '',
   umbandaObrigaCorpo: '',
+  umbandaObrigaCaboclo: '',
+  umbandaObrigaPretoVelho: '',
   umbandaObs: '',
   umbandaAnteriorMata: [],
   umbandaAnteriorMar: [],
