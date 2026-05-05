@@ -1,23 +1,33 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
-import type { Charge, ChargeType, BankAccount } from '../store/useStore';
-import { DollarSign, Plus, ArrowLeft, CheckCircle, Clock, Users, Building2, AlertCircle, Landmark, Trash2, Copy, Calendar, History, TrendingUp, TrendingDown, ChevronDown, Filter, MessageCircle } from 'lucide-react';
-import { motion } from 'framer-motion';
+import type { Charge, ChargeType, BankAccount, CashFlowEntry, InventoryItem, ShoppingListItem } from '../store/useStore';
+import { DollarSign, Plus, ArrowLeft, CheckCircle, Clock, AlertCircle, Landmark, Trash2, Copy, Calendar, History, TrendingUp, TrendingDown, ChevronDown, Filter, MessageCircle, Package, ShoppingCart, AlertTriangle, Bell, ArrowUpCircle, ArrowDownCircle, Pencil, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { generatePixPayload } from '../utils/pix';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { BANKS, findBankByCode, getBankInitials, type Bank } from '../utils/banks';
 
 export default function Financial() {
-  const { currentUser, getFilteredCharges, getMyCharges, getFilteredUsers, addCharge, deleteCharge, markChargeAsPaid, notifyPayment, terreiros, getSystemChargesForCurrentTerreiro, getSystemChargesIssuedByMaster, getCurrentTerreiro, masterPixKey, getBankAccountsForCurrentTerreiro, addBankAccount, updateBankAccount, deleteBankAccount, bankAccounts: _storeBankAccounts } = useStore();
+  const {
+    currentUser, getFilteredCharges, getMyCharges, getFilteredUsers, addCharge, deleteCharge,
+    markChargeAsPaid, notifyPayment, terreiros, getSystemChargesForCurrentTerreiro,
+    getSystemChargesIssuedByMaster, getCurrentTerreiro, masterPixKey,
+    getBankAccountsForCurrentTerreiro, addBankAccount, updateBankAccount, deleteBankAccount,
+    bankAccounts: _storeBankAccounts,
+    cashFlowEntries, fetchCashFlow, addCashFlowEntry, updateCashFlowEntry, deleteCashFlowEntry,
+    inventoryItems, fetchInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem,
+    shoppingListItems, fetchShoppingList, addShoppingListItem,
+    deleteShoppingListItem, toggleShoppingItemPurchased,
+  } = useStore();
   const currentTerreiro = getCurrentTerreiro();
   const role = currentUser?.role?.toUpperCase();
   const isAdmin = role === 'ADMIN';
   const isFinanceiro = role === 'FINANCEIRO';
   const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
   const canManageFinancial = isAdmin || isFinanceiro || isMaster;
-  
-  const [activeTab, setActiveTab] = useState<'HOUSE' | 'SYSTEM' | 'BANKS' | 'HISTORY'>('HOUSE');
+
+  const [activeTab, setActiveTab] = useState<'HOUSE' | 'SYSTEM' | 'BANKS' | 'HISTORY' | 'CASHFLOW' | 'INVENTORY'>('HOUSE');
   const [view, setView] = useState<'LIST' | 'FORM' | 'FORM_BANK'>('LIST');
 
   // History state
@@ -61,6 +71,44 @@ export default function Financial() {
   const [deleteBankModal, setDeleteBankModal] = useState<{ isOpen: boolean; bankId: string; bankName: string }>({ isOpen: false, bankId: '', bankName: '' });
   const [bankSelectorModal, setBankSelectorModal] = useState<{ isOpen: boolean; targetId: string }>({ isOpen: false, targetId: '' });
   const [bankSearch, setBankSearch] = useState('');
+
+  // ─── Cash Flow state ───────────────────────────────────
+  const [showCashFlowForm, setShowCashFlowForm] = useState(false);
+  const [editingCashFlow, setEditingCashFlow] = useState<CashFlowEntry | null>(null);
+  const [cashFlowForm, setCashFlowForm] = useState<Omit<CashFlowEntry, 'id' | 'terreiroId' | 'createdAt'>>({
+    type: 'recebimento', description: '', amount: 0, date: '', realized: false, notes: '',
+  });
+  const [deleteCashFlowModal, setDeleteCashFlowModal] = useState<{ isOpen: boolean; id: string; description: string }>({ isOpen: false, id: '', description: '' });
+
+  // ─── Inventory state ───────────────────────────────────
+  const [inventorySubTab, setInventorySubTab] = useState<'ITEMS' | 'SHOPPING'>('ITEMS');
+  const [showInventoryForm, setShowInventoryForm] = useState(false);
+  const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null);
+  const [inventoryForm, setInventoryForm] = useState<Omit<InventoryItem, 'id' | 'terreiroId' | 'createdAt'>>({
+    name: '', category: '', unit: 'un', currentStock: 0, minimumStock: 0, unitPrice: 0, notes: '',
+  });
+  const [deleteInventoryModal, setDeleteInventoryModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: '', name: '' });
+
+  // ─── Shopping List state ───────────────────────────────
+  const [showShoppingForm, setShowShoppingForm] = useState(false);
+  const [shoppingForm, setShoppingForm] = useState<Omit<ShoppingListItem, 'id' | 'terreiroId' | 'createdAt'>>({
+    name: '', quantity: 1, unit: 'un', estimatedPrice: 0, purchased: false,
+  });
+  const [deleteShoppingModal, setDeleteShoppingModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: '', name: '' });
+
+  // Fetch remote data the first time each tab is opened.
+  // Zustand actions are stable references created at store init, so they are
+  // safe to omit from deps — including them would risk infinite re-fetches if
+  // the store is ever recreated. activeTab is the only meaningful trigger here.
+  useEffect(() => {
+    if (activeTab === 'CASHFLOW') {
+      fetchCashFlow();
+    } else if (activeTab === 'INVENTORY') {
+      fetchInventory();
+      fetchShoppingList();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const openWhatsApp = (phone: string, message?: string) => {
     const cleaned = phone.replace(/\D/g, '');
@@ -160,10 +208,20 @@ export default function Financial() {
                 style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'HISTORY' ? '#00ff88' : 'transparent', color: activeTab === 'HISTORY' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <History size={14} /> Histórico
               </button>
+              <button
+                onClick={() => setActiveTab('CASHFLOW')}
+                style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'CASHFLOW' ? 'var(--neon-cyan)' : 'transparent', color: activeTab === 'CASHFLOW' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <TrendingUp size={14} /> Fluxo de Caixa
+              </button>
+              <button
+                onClick={() => setActiveTab('INVENTORY')}
+                style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'INVENTORY' ? 'var(--accent-gold, #e2b714)' : 'transparent', color: activeTab === 'INVENTORY' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Package size={14} /> Estoque
+              </button>
             </div>
           )}
 
-          {canManageFinancial && view === 'LIST' && activeTab !== 'HISTORY' && (
+          {canManageFinancial && view === 'LIST' && activeTab !== 'HISTORY' && activeTab !== 'CASHFLOW' && activeTab !== 'INVENTORY' && (
             <button
               onClick={() => {
                 if (activeTab === 'BANKS') {
@@ -177,6 +235,33 @@ export default function Financial() {
               style={{ padding: '0.8rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0, 240, 255, 0.15)', color: '#fff', border: '1px solid var(--neon-cyan)', cursor: 'pointer' }}
             >
               <Plus size={18} /> {activeTab === 'BANKS' ? 'Nova Conta' : (activeTab === 'SYSTEM' ? 'Cobrar Terreiros' : 'Nova Cobrança')}
+            </button>
+          )}
+          {canManageFinancial && activeTab === 'CASHFLOW' && (
+            <button
+              onClick={() => { setShowCashFlowForm(v => !v); setEditingCashFlow(null); setCashFlowForm({ type: 'recebimento', description: '', amount: 0, date: '', realized: false, notes: '' }); }}
+              className="glass-panel glow-fx"
+              style={{ padding: '0.8rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0, 240, 255, 0.15)', color: '#fff', border: '1px solid var(--neon-cyan)', cursor: 'pointer' }}
+            >
+              <Plus size={18} /> Nova Entrada
+            </button>
+          )}
+          {canManageFinancial && activeTab === 'INVENTORY' && inventorySubTab === 'ITEMS' && (
+            <button
+              onClick={() => { setShowInventoryForm(v => !v); setEditingInventory(null); setInventoryForm({ name: '', category: '', unit: 'un', currentStock: 0, minimumStock: 0, unitPrice: 0, notes: '' }); }}
+              className="glass-panel glow-fx"
+              style={{ padding: '0.8rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(226,183,20,0.15)', color: '#fff', border: '1px solid var(--accent-gold, #e2b714)', cursor: 'pointer' }}
+            >
+              <Plus size={18} /> Novo Item
+            </button>
+          )}
+          {canManageFinancial && activeTab === 'INVENTORY' && inventorySubTab === 'SHOPPING' && (
+            <button
+              onClick={() => setShowShoppingForm(v => !v)}
+              className="glass-panel glow-fx"
+              style={{ padding: '0.8rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0, 240, 255, 0.15)', color: '#fff', border: '1px solid var(--neon-cyan)', cursor: 'pointer' }}
+            >
+              <Plus size={18} /> Adicionar Item
             </button>
           )}
           {(view === 'FORM' || view === 'FORM_BANK') && (
@@ -869,6 +954,444 @@ export default function Financial() {
             </div>
           );
         })()}
+
+        {/* ═══════════════════════════════════════════════════════
+            FLUXO DE CAIXA TAB
+        ═══════════════════════════════════════════════════════ */}
+        {activeTab === 'CASHFLOW' && (() => {
+          const totalRecebido = cashFlowEntries.filter(e => e.type === 'recebimento' && e.realized).reduce((s, e) => s + e.amount, 0);
+          const totalPago = cashFlowEntries.filter(e => e.type === 'pagamento' && e.realized).reduce((s, e) => s + e.amount, 0);
+          const prevReceber = cashFlowEntries.filter(e => e.type === 'previsao_recebimento' && !e.realized).reduce((s, e) => s + e.amount, 0);
+          const prevPagar = cashFlowEntries.filter(e => e.type === 'previsao_pagamento' && !e.realized).reduce((s, e) => s + e.amount, 0);
+          const saldoReal = totalRecebido - totalPago;
+          const saldoProjetado = saldoReal + prevReceber - prevPagar;
+
+          const typeConfig: Record<CashFlowEntry['type'], { label: string; color: string; icon: React.ReactNode }> = {
+            recebimento: { label: 'Recebimento', color: '#00ff88', icon: <ArrowUpCircle size={15} /> },
+            pagamento: { label: 'Pagamento', color: '#ff4c4c', icon: <ArrowDownCircle size={15} /> },
+            previsao_recebimento: { label: 'Prev. Recebimento', color: '#00f0ff', icon: <ArrowUpCircle size={15} /> },
+            previsao_pagamento: { label: 'Prev. Pagamento', color: '#ffaa00', icon: <ArrowDownCircle size={15} /> },
+          };
+
+          const handleCashFlowSubmit = async (e: React.FormEvent) => {
+            e.preventDefault();
+            if (editingCashFlow) {
+              await updateCashFlowEntry(editingCashFlow.id, cashFlowForm);
+            } else {
+              await addCashFlowEntry(cashFlowForm);
+            }
+            setShowCashFlowForm(false);
+            setEditingCashFlow(null);
+            setCashFlowForm({ type: 'recebimento', description: '', amount: 0, date: '', realized: false, notes: '' });
+          };
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {/* Summary cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+                {[
+                  { label: 'Total Recebido', value: totalRecebido, color: '#00ff88', icon: <ArrowUpCircle size={14} /> },
+                  { label: 'Total Pago', value: totalPago, color: '#ff4c4c', icon: <ArrowDownCircle size={14} /> },
+                  { label: 'Prev. Receber', value: prevReceber, color: '#00f0ff', icon: <TrendingUp size={14} /> },
+                  { label: 'Prev. Pagar', value: prevPagar, color: '#ffaa00', icon: <TrendingDown size={14} /> },
+                  { label: 'Saldo Real', value: saldoReal, color: saldoReal >= 0 ? '#00ff88' : '#ff4c4c', icon: <CheckCircle size={14} /> },
+                  { label: 'Saldo Projetado', value: saldoProjetado, color: saldoProjetado >= 0 ? '#00f0ff' : '#ff4c4c', icon: <TrendingUp size={14} /> },
+                ].map(card => (
+                  <div key={card.label} className="panel glass-panel" style={{ padding: '1.2rem', borderRadius: 12, borderLeft: `3px solid ${card.color}` }}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ color: card.color }}>{card.icon}</span> {card.label}
+                    </div>
+                    <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: card.color, marginTop: '0.3rem' }}>{formatCurrency(card.value)}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Inline form */}
+              <AnimatePresence>
+                {showCashFlowForm && (
+                  <motion.form
+                    key="cashflow-form"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    onSubmit={handleCashFlowSubmit}
+                    className="glass-panel"
+                    style={{ padding: '1.5rem', borderRadius: 12, border: '1px solid var(--neon-cyan)', display: 'flex', flexDirection: 'column', gap: '1.2rem', overflow: 'hidden' }}
+                  >
+                    <h4 style={{ margin: 0, color: 'var(--neon-cyan)' }}>{editingCashFlow ? 'Editar Entrada' : 'Nova Entrada de Fluxo de Caixa'}</h4>
+
+                    {/* Type chips */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {(Object.entries(typeConfig) as [CashFlowEntry['type'], typeof typeConfig[CashFlowEntry['type']]][]).map(([key, cfg]) => (
+                        <button
+                          key={key} type="button"
+                          onClick={() => setCashFlowForm(f => ({ ...f, type: key }))}
+                          style={{ padding: '0.4rem 1rem', borderRadius: 20, border: `1px solid ${cashFlowForm.type === key ? cfg.color : 'var(--glass-border)'}`, background: cashFlowForm.type === key ? `${cfg.color}22` : 'transparent', color: cashFlowForm.type === key ? cfg.color : 'var(--text-muted)', cursor: 'pointer', fontWeight: cashFlowForm.type === key ? 'bold' : 'normal', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}
+                        >
+                          {cfg.icon} {cfg.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem' }}>
+                      <Input label="Descrição *" placeholder="Ex: Doação de membro" value={cashFlowForm.description} onChange={v => setCashFlowForm(f => ({ ...f, description: v }))} required />
+                      <Input label="Valor (R$) *" type="number" placeholder="0.00" value={cashFlowForm.amount.toString()} onChange={v => setCashFlowForm(f => ({ ...f, amount: Number(v) }))} required />
+                      <Input label="Data *" type="date" value={cashFlowForm.date} onChange={v => setCashFlowForm(f => ({ ...f, date: v }))} required />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '1rem', alignItems: 'end' }}>
+                      <Input label="Observações" placeholder="Notas adicionais..." value={cashFlowForm.notes} onChange={v => setCashFlowForm(f => ({ ...f, notes: v }))} />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', paddingBottom: '0.8rem', color: cashFlowForm.realized ? '#00ff88' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        <input type="checkbox" checked={cashFlowForm.realized} onChange={e => setCashFlowForm(f => ({ ...f, realized: e.target.checked }))} style={{ width: 16, height: 16, accentColor: '#00ff88' }} />
+                        Realizado
+                      </label>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end' }}>
+                      <button type="button" onClick={() => { setShowCashFlowForm(false); setEditingCashFlow(null); }}
+                        style={{ padding: '0.7rem 1.5rem', border: '1px solid var(--glass-border)', borderRadius: 8, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                        Cancelar
+                      </button>
+                      <button type="submit"
+                        style={{ padding: '0.7rem 1.5rem', border: 'none', borderRadius: 8, background: 'var(--neon-cyan)', color: '#000', fontWeight: 'bold', cursor: 'pointer' }}>
+                        {editingCashFlow ? 'Salvar Alterações' : 'Adicionar'}
+                      </button>
+                    </div>
+                  </motion.form>
+                )}
+              </AnimatePresence>
+
+              {/* Entries list */}
+              <div className="panel glass-panel" style={{ padding: '1.5rem', borderRadius: 'var(--panel-radius)' }}>
+                {cashFlowEntries.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Nenhuma entrada cadastrada. Clique em "Nova Entrada" para começar.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    {cashFlowEntries.map(entry => {
+                      const cfg = typeConfig[entry.type];
+                      return (
+                        <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.9rem 1rem', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: `1px solid ${entry.realized ? `${cfg.color}44` : 'rgba(255,255,255,0.07)'}` }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.8rem', borderRadius: 20, background: `${cfg.color}18`, color: cfg.color, fontSize: '0.78rem', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                              {cfg.icon} {cfg.label}
+                            </span>
+                            <div>
+                              <div style={{ fontWeight: 'bold' }}>{entry.description}</div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                {new Date(entry.date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                {entry.notes && ` • ${entry.notes}`}
+                                {entry.realized && <span style={{ color: '#00ff88', marginLeft: '0.4rem' }}>• Realizado</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: cfg.color }}>{formatCurrency(entry.amount)}</span>
+                            {canManageFinancial && (
+                              <>
+                                <button onClick={() => { setEditingCashFlow(entry); setCashFlowForm({ type: entry.type, description: entry.description, amount: entry.amount, date: entry.date, realized: entry.realized, notes: entry.notes }); setShowCashFlowForm(true); }}
+                                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--neon-cyan)', padding: '0.3rem' }} title="Editar">
+                                  <Pencil size={15} />
+                                </button>
+                                <button onClick={() => setDeleteCashFlowModal({ isOpen: true, id: entry.id, description: entry.description })}
+                                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ff4c4c', padding: '0.3rem' }} title="Excluir">
+                                  <Trash2 size={15} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ═══════════════════════════════════════════════════════
+            ESTOQUE TAB
+        ═══════════════════════════════════════════════════════ */}
+        {activeTab === 'INVENTORY' && (() => {
+          const belowMin = inventoryItems.filter(i => i.currentStock < i.minimumStock);
+          const pendingShop = shoppingListItems.filter(i => !i.purchased);
+          const purchasedShop = shoppingListItems.filter(i => i.purchased);
+          const totalEstimated = pendingShop.reduce((s, i) => s + i.quantity * i.estimatedPrice, 0);
+
+          const handleInventorySubmit = async (e: React.FormEvent) => {
+            e.preventDefault();
+            if (editingInventory) {
+              await updateInventoryItem(editingInventory.id, inventoryForm);
+            } else {
+              await addInventoryItem(inventoryForm);
+            }
+            setShowInventoryForm(false);
+            setEditingInventory(null);
+            setInventoryForm({ name: '', category: '', unit: 'un', currentStock: 0, minimumStock: 0, unitPrice: 0, notes: '' });
+          };
+
+          const handleShoppingSubmit = async (e: React.FormEvent) => {
+            e.preventDefault();
+            await addShoppingListItem(shoppingForm);
+            setShowShoppingForm(false);
+            setShoppingForm({ name: '', quantity: 1, unit: 'un', estimatedPrice: 0, purchased: false });
+          };
+
+          const handleAddToShoppingList = async (item: InventoryItem) => {
+            await addShoppingListItem({
+              name: item.name,
+              quantity: item.minimumStock - item.currentStock,
+              unit: item.unit,
+              estimatedPrice: item.unitPrice,
+              purchased: false,
+              inventoryItemId: item.id,
+            });
+          };
+
+          const handleClearPurchased = async () => {
+            await Promise.all(purchasedShop.map(i => deleteShoppingListItem(i.id)));
+          };
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {/* Sub-tabs */}
+              <div style={{ display: 'flex', gap: '0.3rem', background: 'rgba(255,255,255,0.04)', padding: '0.3rem', borderRadius: 10, width: 'fit-content' }}>
+                <button onClick={() => setInventorySubTab('ITEMS')}
+                  style={{ padding: '0.5rem 1.2rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: inventorySubTab === 'ITEMS' ? 'var(--accent-gold, #e2b714)' : 'transparent', color: inventorySubTab === 'ITEMS' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Package size={14} /> Itens
+                </button>
+                <button onClick={() => setInventorySubTab('SHOPPING')}
+                  style={{ padding: '0.5rem 1.2rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: inventorySubTab === 'SHOPPING' ? 'var(--neon-cyan)' : 'transparent', color: inventorySubTab === 'SHOPPING' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <ShoppingCart size={14} /> Lista de Compras
+                  {pendingShop.length > 0 && <span style={{ background: '#ff4c4c', color: '#fff', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 'bold' }}>{pendingShop.length}</span>}
+                </button>
+              </div>
+
+              {/* ── SUB-ABA: ITENS ── */}
+              {inventorySubTab === 'ITEMS' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                  {/* Low stock alerts */}
+                  {belowMin.length > 0 && (
+                    <div className="glass-panel" style={{ padding: '1rem 1.2rem', border: '1px solid #ff4c4c', borderRadius: 12, background: 'rgba(255,76,76,0.07)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.6rem' }}>
+                        <Bell size={16} color="#ff4c4c" />
+                        <strong style={{ color: '#ff4c4c' }}>{belowMin.length} item(ns) abaixo do estoque mínimo</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        {belowMin.map(i => (
+                          <span key={i.id} style={{ padding: '0.3rem 0.8rem', background: 'rgba(255,76,76,0.15)', border: '1px solid rgba(255,76,76,0.4)', borderRadius: 20, fontSize: '0.8rem', color: '#ff4c4c' }}>
+                            <AlertTriangle size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                            {i.name} ({i.currentStock}/{i.minimumStock} {i.unit})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Inline form */}
+                  <AnimatePresence>
+                    {showInventoryForm && (
+                      <motion.form
+                        key="inventory-form"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        onSubmit={handleInventorySubmit}
+                        className="glass-panel"
+                        style={{ padding: '1.5rem', borderRadius: 12, border: '1px solid var(--accent-gold, #e2b714)', display: 'flex', flexDirection: 'column', gap: '1rem', overflow: 'hidden' }}
+                      >
+                        <h4 style={{ margin: 0, color: 'var(--accent-gold, #e2b714)' }}>{editingInventory ? 'Editar Item' : 'Novo Item de Estoque'}</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem' }}>
+                          <Input label="Nome *" placeholder="Ex: Vela branca" value={inventoryForm.name} onChange={v => setInventoryForm(f => ({ ...f, name: v }))} required />
+                          <Input label="Categoria" placeholder="Ex: Velas" value={inventoryForm.category} onChange={v => setInventoryForm(f => ({ ...f, category: v }))} />
+                          <Input label="Unidade" placeholder="un, kg, L..." value={inventoryForm.unit} onChange={v => setInventoryForm(f => ({ ...f, unit: v }))} />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                          <Input label="Estoque Atual" type="number" value={inventoryForm.currentStock.toString()} onChange={v => setInventoryForm(f => ({ ...f, currentStock: Number(v) }))} />
+                          <Input label="Estoque Mínimo" type="number" value={inventoryForm.minimumStock.toString()} onChange={v => setInventoryForm(f => ({ ...f, minimumStock: Number(v) }))} />
+                          <Input label="Preço Unitário (R$)" type="number" value={inventoryForm.unitPrice.toString()} onChange={v => setInventoryForm(f => ({ ...f, unitPrice: Number(v) }))} />
+                        </div>
+                        <Input label="Observações" placeholder="Notas sobre o item..." value={inventoryForm.notes} onChange={v => setInventoryForm(f => ({ ...f, notes: v }))} />
+                        <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end' }}>
+                          <button type="button" onClick={() => { setShowInventoryForm(false); setEditingInventory(null); }}
+                            style={{ padding: '0.7rem 1.5rem', border: '1px solid var(--glass-border)', borderRadius: 8, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                            Cancelar
+                          </button>
+                          <button type="submit"
+                            style={{ padding: '0.7rem 1.5rem', border: 'none', borderRadius: 8, background: 'var(--accent-gold, #e2b714)', color: '#000', fontWeight: 'bold', cursor: 'pointer' }}>
+                            {editingInventory ? 'Salvar' : 'Adicionar Item'}
+                          </button>
+                        </div>
+                      </motion.form>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Items table */}
+                  <div className="panel glass-panel" style={{ padding: '1.5rem', borderRadius: 'var(--panel-radius)' }}>
+                    {inventoryItems.length === 0 ? (
+                      <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Nenhum item cadastrado. Clique em "Novo Item" para começar.</p>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                              {['Nome', 'Categoria', 'Unidade', 'Estoque Atual', 'Mínimo', 'Valor Unit.', 'Valor Total', ''].map(h => (
+                                <th key={h} style={{ padding: '0.6rem 0.8rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {inventoryItems.map(item => {
+                              const isLow = item.currentStock < item.minimumStock;
+                              return (
+                                <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: isLow ? 'rgba(255,76,76,0.06)' : 'transparent' }}>
+                                  <td style={{ padding: '0.7rem 0.8rem', fontWeight: 'bold', color: isLow ? '#ff4c4c' : 'var(--text-main)' }}>
+                                    {isLow && <AlertTriangle size={13} style={{ verticalAlign: 'middle', marginRight: 4, color: '#ff4c4c' }} />}
+                                    {item.name}
+                                  </td>
+                                  <td style={{ padding: '0.7rem 0.8rem', color: 'var(--text-muted)' }}>{item.category || '—'}</td>
+                                  <td style={{ padding: '0.7rem 0.8rem', color: 'var(--text-muted)' }}>{item.unit}</td>
+                                  <td style={{ padding: '0.7rem 0.8rem', fontWeight: 'bold', color: isLow ? '#ff4c4c' : '#00ff88' }}>{item.currentStock}</td>
+                                  <td style={{ padding: '0.7rem 0.8rem', color: 'var(--text-muted)' }}>{item.minimumStock}</td>
+                                  <td style={{ padding: '0.7rem 0.8rem' }}>{formatCurrency(item.unitPrice)}</td>
+                                  <td style={{ padding: '0.7rem 0.8rem', fontWeight: 'bold' }}>{formatCurrency(item.currentStock * item.unitPrice)}</td>
+                                  <td style={{ padding: '0.7rem 0.8rem' }}>
+                                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                      {isLow && (
+                                        <button onClick={() => handleAddToShoppingList(item)} title="Adicionar à lista de compras"
+                                          style={{ padding: '0.3rem 0.6rem', borderRadius: 6, border: '1px solid var(--neon-cyan)', background: 'rgba(0,240,255,0.1)', color: 'var(--neon-cyan)', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem', whiteSpace: 'nowrap' }}>
+                                          <ShoppingCart size={12} /> Lista
+                                        </button>
+                                      )}
+                                      {canManageFinancial && (
+                                        <>
+                                          <button onClick={() => { setEditingInventory(item); setInventoryForm({ name: item.name, category: item.category, unit: item.unit, currentStock: item.currentStock, minimumStock: item.minimumStock, unitPrice: item.unitPrice, notes: item.notes }); setShowInventoryForm(true); }}
+                                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--neon-cyan)', padding: '0.3rem' }} title="Editar">
+                                            <Pencil size={14} />
+                                          </button>
+                                          <button onClick={() => setDeleteInventoryModal({ isOpen: true, id: item.id, name: item.name })}
+                                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ff4c4c', padding: '0.3rem' }} title="Excluir">
+                                            <Trash2 size={14} />
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── SUB-ABA: LISTA DE COMPRAS ── */}
+              {inventorySubTab === 'SHOPPING' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                  {/* Summary cards */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+                    <div className="panel glass-panel" style={{ padding: '1.2rem', borderRadius: 12, borderLeft: '3px solid var(--neon-cyan)' }}>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Total Previsto</div>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--neon-cyan)', marginTop: '0.3rem' }}>{formatCurrency(totalEstimated)}</div>
+                    </div>
+                    <div className="panel glass-panel" style={{ padding: '1.2rem', borderRadius: 12, borderLeft: '3px solid #ffaa00' }}>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Itens Pendentes</div>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#ffaa00', marginTop: '0.3rem' }}>{pendingShop.length}</div>
+                    </div>
+                    <div className="panel glass-panel" style={{ padding: '1.2rem', borderRadius: 12, borderLeft: '3px solid #00ff88' }}>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Itens Comprados</div>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#00ff88', marginTop: '0.3rem' }}>{purchasedShop.length}</div>
+                    </div>
+                  </div>
+
+                  {/* Inline form */}
+                  <AnimatePresence>
+                    {showShoppingForm && (
+                      <motion.form
+                        key="shopping-form"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        onSubmit={handleShoppingSubmit}
+                        className="glass-panel"
+                        style={{ padding: '1.5rem', borderRadius: 12, border: '1px solid var(--neon-cyan)', display: 'flex', flexDirection: 'column', gap: '1rem', overflow: 'hidden' }}
+                      >
+                        <h4 style={{ margin: 0, color: 'var(--neon-cyan)' }}>Adicionar à Lista de Compras</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '1rem' }}>
+                          <Input label="Item *" placeholder="Ex: Vela branca" value={shoppingForm.name} onChange={v => setShoppingForm(f => ({ ...f, name: v }))} required />
+                          <Input label="Quantidade" type="number" value={shoppingForm.quantity.toString()} onChange={v => setShoppingForm(f => ({ ...f, quantity: Number(v) }))} />
+                          <Input label="Unidade" placeholder="un, kg..." value={shoppingForm.unit} onChange={v => setShoppingForm(f => ({ ...f, unit: v }))} />
+                          <Input label="Preço Estimado (R$)" type="number" value={shoppingForm.estimatedPrice.toString()} onChange={v => setShoppingForm(f => ({ ...f, estimatedPrice: Number(v) }))} />
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end' }}>
+                          <button type="button" onClick={() => setShowShoppingForm(false)}
+                            style={{ padding: '0.7rem 1.5rem', border: '1px solid var(--glass-border)', borderRadius: 8, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                            Cancelar
+                          </button>
+                          <button type="submit"
+                            style={{ padding: '0.7rem 1.5rem', border: 'none', borderRadius: 8, background: 'var(--neon-cyan)', color: '#000', fontWeight: 'bold', cursor: 'pointer' }}>
+                            Adicionar
+                          </button>
+                        </div>
+                      </motion.form>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Shopping list */}
+                  <div className="panel glass-panel" style={{ padding: '1.5rem', borderRadius: 'var(--panel-radius)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.8rem' }}>
+                      <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}><ShoppingCart size={18} /> Lista de Compras</h3>
+                      {purchasedShop.length > 0 && (
+                        <button onClick={handleClearPurchased}
+                          style={{ padding: '0.4rem 1rem', borderRadius: 8, border: '1px solid rgba(255,76,76,0.4)', background: 'rgba(255,76,76,0.1)', color: '#ff4c4c', cursor: 'pointer', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <X size={13} /> Limpar Comprados ({purchasedShop.length})
+                        </button>
+                      )}
+                    </div>
+                    {shoppingListItems.length === 0 ? (
+                      <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Lista vazia. Adicione itens ou gere automaticamente a partir do estoque.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {shoppingListItems.map(item => (
+                          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem 1rem', borderRadius: 8, background: item.purchased ? 'rgba(0,255,136,0.04)' : 'rgba(255,255,255,0.02)', border: `1px solid ${item.purchased ? 'rgba(0,255,136,0.2)' : 'rgba(255,255,255,0.06)'}`, opacity: item.purchased ? 0.6 : 1 }}>
+                            <input
+                              type="checkbox"
+                              checked={item.purchased}
+                              onChange={() => toggleShoppingItemPurchased(item.id)}
+                              style={{ width: 18, height: 18, accentColor: '#00ff88', cursor: 'pointer', flexShrink: 0 }}
+                            />
+                            <div style={{ flex: 1 }}>
+                              <span style={{ fontWeight: 'bold', textDecoration: item.purchased ? 'line-through' : 'none', color: item.purchased ? 'var(--text-muted)' : 'var(--text-main)' }}>
+                                {item.name}
+                              </span>
+                              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+                                {item.quantity} {item.unit}
+                              </span>
+                            </div>
+                            <div style={{ textAlign: 'right', minWidth: '80px' }}>
+                              {item.estimatedPrice > 0 && (
+                                <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: item.purchased ? 'var(--text-muted)' : 'var(--neon-cyan)' }}>
+                                  {formatCurrency(item.quantity * item.estimatedPrice)}
+                                </div>
+                              )}
+                            </div>
+                            <button onClick={() => setDeleteShoppingModal({ isOpen: true, id: item.id, name: item.name })}
+                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ff4c4c', padding: '0.3rem', flexShrink: 0 }} title="Remover">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         </div>
       )}
 
@@ -903,7 +1426,7 @@ export default function Financial() {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.8rem', marginBottom: '1.5rem' }}>
               <h3 style={{ color: 'var(--neon-purple)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {activeTab === 'SYSTEM' ? <><Building2 size={20} /> Terreiros para Cobrança</> : <><Users size={20} /> Membros Selecionados</>}
+                {activeTab === 'SYSTEM' ? <><Landmark size={20} /> Terreiros para Cobrança</> : <><Filter size={20} /> Membros Selecionados</>}
               </h3>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button type="button" onClick={() => setNewCharge({...newCharge, assignedTo: (activeTab === 'SYSTEM' ? otherTerreiros : activeTargetUsers).map(u => u.id)})} className="glass-panel" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', borderRadius: 4 }}>
@@ -1084,6 +1607,60 @@ export default function Financial() {
         title="Excluir Conta Bancária"
         message={`Tem certeza que deseja excluir a conta "${deleteBankModal.bankName}"? Esta ação não pode ser desfeita.`}
         confirmLabel="Excluir"
+        variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={deleteCashFlowModal.isOpen}
+        onClose={() => setDeleteCashFlowModal({ isOpen: false, id: '', description: '' })}
+        onConfirm={async () => {
+          try {
+            await deleteCashFlowEntry(deleteCashFlowModal.id);
+          } catch {
+            alert('Erro ao excluir a entrada. Verifique sua conexão e tente novamente.');
+          } finally {
+            setDeleteCashFlowModal({ isOpen: false, id: '', description: '' });
+          }
+        }}
+        title="Excluir Entrada"
+        message={`Tem certeza que deseja excluir "${deleteCashFlowModal.description}"? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={deleteInventoryModal.isOpen}
+        onClose={() => setDeleteInventoryModal({ isOpen: false, id: '', name: '' })}
+        onConfirm={async () => {
+          try {
+            await deleteInventoryItem(deleteInventoryModal.id);
+          } catch {
+            alert('Erro ao excluir o item. Verifique sua conexão e tente novamente.');
+          } finally {
+            setDeleteInventoryModal({ isOpen: false, id: '', name: '' });
+          }
+        }}
+        title="Excluir Item de Estoque"
+        message={`Tem certeza que deseja excluir "${deleteInventoryModal.name}"? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={deleteShoppingModal.isOpen}
+        onClose={() => setDeleteShoppingModal({ isOpen: false, id: '', name: '' })}
+        onConfirm={async () => {
+          try {
+            await deleteShoppingListItem(deleteShoppingModal.id);
+          } catch {
+            alert('Erro ao remover item da lista. Verifique sua conexão e tente novamente.');
+          } finally {
+            setDeleteShoppingModal({ isOpen: false, id: '', name: '' });
+          }
+        }}
+        title="Remover da Lista de Compras"
+        message={`Tem certeza que deseja remover "${deleteShoppingModal.name}" da lista?`}
+        confirmLabel="Remover"
         variant="danger"
       />
     </motion.div>

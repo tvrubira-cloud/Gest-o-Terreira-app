@@ -3,6 +3,45 @@ import { supabase, supabaseRead } from '../lib/supabase';
 
 export type Role = 'ADMIN' | 'FINANCEIRO' | 'SECRETARIA' | 'USER';
 
+// ─── Cash Flow ─────────────────────────────────────────────────
+export interface CashFlowEntry {
+  id: string;
+  terreiroId: string;
+  type: 'recebimento' | 'pagamento' | 'previsao_recebimento' | 'previsao_pagamento';
+  description: string;
+  amount: number;
+  date: string;
+  realized: boolean;
+  notes: string;
+  createdAt: string;
+}
+
+// ─── Inventory ─────────────────────────────────────────────────
+export interface InventoryItem {
+  id: string;
+  terreiroId: string;
+  name: string;
+  category: string;
+  unit: string;
+  currentStock: number;
+  minimumStock: number;
+  unitPrice: number;
+  notes: string;
+  createdAt: string;
+}
+
+export interface ShoppingListItem {
+  id: string;
+  terreiroId: string;
+  inventoryItemId?: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  estimatedPrice: number;
+  purchased: boolean;
+  createdAt: string;
+}
+
 export interface SpiritualData {
   // Novos campos
   situacaoCadastro: 'ativo' | 'inativo';
@@ -236,6 +275,28 @@ interface AppState {
   getSystemChargesIssuedByMaster: () => Charge[];
   getBankAccountsForCurrentTerreiro: () => BankAccount[];
 
+  // ─── Cash Flow state ────────────────────────────────────
+  cashFlowEntries: CashFlowEntry[];
+  fetchCashFlow: () => Promise<void>;
+  addCashFlowEntry: (entry: Omit<CashFlowEntry, 'id' | 'terreiroId' | 'createdAt'>) => Promise<void>;
+  updateCashFlowEntry: (id: string, data: Partial<CashFlowEntry>) => Promise<void>;
+  deleteCashFlowEntry: (id: string) => Promise<void>;
+
+  // ─── Inventory state ────────────────────────────────────
+  inventoryItems: InventoryItem[];
+  fetchInventory: () => Promise<void>;
+  addInventoryItem: (item: Omit<InventoryItem, 'id' | 'terreiroId' | 'createdAt'>) => Promise<void>;
+  updateInventoryItem: (id: string, data: Partial<InventoryItem>) => Promise<void>;
+  deleteInventoryItem: (id: string) => Promise<void>;
+
+  // ─── Shopping List state ────────────────────────────────
+  shoppingListItems: ShoppingListItem[];
+  fetchShoppingList: () => Promise<void>;
+  addShoppingListItem: (item: Omit<ShoppingListItem, 'id' | 'terreiroId' | 'createdAt'>) => Promise<void>;
+  updateShoppingListItem: (id: string, data: Partial<ShoppingListItem>) => Promise<void>;
+  deleteShoppingListItem: (id: string) => Promise<void>;
+  toggleShoppingItemPurchased: (id: string) => Promise<void>;
+
   // Actions
   initializeData: (forcedTerreiroId?: string) => Promise<void>;
   checkCpf: (cpf: string) => Promise<{ exists: boolean; hasPassword: boolean; userName?: string }>;
@@ -386,6 +447,51 @@ function dbToBankAccount(row: any): BankAccount {
 
 // ─── Store ─────────────────────────────────────────────────────
 
+// ─── Helpers: Cash Flow / Inventory ───────────────────────────
+
+function dbToCashFlowEntry(row: any): CashFlowEntry {
+  return {
+    id: row.id,
+    terreiroId: row.terreiro_id,
+    type: row.type,
+    description: row.description || '',
+    amount: Number(row.amount),
+    date: row.date || '',
+    realized: row.realized ?? false,
+    notes: row.notes || '',
+    createdAt: row.created_at,
+  };
+}
+
+function dbToInventoryItem(row: any): InventoryItem {
+  return {
+    id: row.id,
+    terreiroId: row.terreiro_id,
+    name: row.name || '',
+    category: row.category || '',
+    unit: row.unit || 'un',
+    currentStock: Number(row.current_stock),
+    minimumStock: Number(row.minimum_stock),
+    unitPrice: Number(row.unit_price),
+    notes: row.notes || '',
+    createdAt: row.created_at,
+  };
+}
+
+function dbToShoppingListItem(row: any): ShoppingListItem {
+  return {
+    id: row.id,
+    terreiroId: row.terreiro_id,
+    inventoryItemId: row.inventory_item_id || undefined,
+    name: row.name || '',
+    quantity: Number(row.quantity),
+    unit: row.unit || 'un',
+    estimatedPrice: Number(row.estimated_price),
+    purchased: row.purchased ?? false,
+    createdAt: row.created_at,
+  };
+}
+
 export const useStore = create<AppState>()((set, get) => ({
   terreiros: [],
   users: [],
@@ -393,6 +499,9 @@ export const useStore = create<AppState>()((set, get) => ({
   broadcasts: [],
   charges: [],
   bankAccounts: [],
+  cashFlowEntries: [],
+  inventoryItems: [],
+  shoppingListItems: [],
   currentUser: null,
   currentTerreiroId: null,
   isLoading: false,
@@ -1582,6 +1691,182 @@ export const useStore = create<AppState>()((set, get) => ({
     }
   },
 
+  // ─── Cash Flow Actions ─────────────────────────────────
+  fetchCashFlow: async () => {
+    const { currentTerreiroId } = get();
+    if (!currentTerreiroId) return;
+    const { data, error } = await supabaseRead
+      .from('cash_flow_entries')
+      .select('*')
+      .eq('terreiro_id', currentTerreiroId)
+      .order('date', { ascending: false });
+    if (!error && data) {
+      set({ cashFlowEntries: data.map(dbToCashFlowEntry) });
+    }
+  },
+
+  addCashFlowEntry: async (entry) => {
+    const { currentTerreiroId } = get();
+    if (!currentTerreiroId) return;
+    const { data, error } = await supabase
+      .from('cash_flow_entries')
+      .insert({
+        terreiro_id: currentTerreiroId,
+        type: entry.type,
+        description: entry.description,
+        amount: entry.amount,
+        date: entry.date,
+        realized: entry.realized,
+        notes: entry.notes || '',
+      })
+      .select()
+      .single();
+    if (!error && data) {
+      set({ cashFlowEntries: [dbToCashFlowEntry(data), ...get().cashFlowEntries] });
+    }
+  },
+
+  updateCashFlowEntry: async (id, data) => {
+    const updateData: any = {};
+    if (data.type !== undefined) updateData.type = data.type;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.amount !== undefined) updateData.amount = data.amount;
+    if (data.date !== undefined) updateData.date = data.date;
+    if (data.realized !== undefined) updateData.realized = data.realized;
+    if (data.notes !== undefined) updateData.notes = data.notes;
+    const { error } = await supabase.from('cash_flow_entries').update(updateData).eq('id', id);
+    if (!error) {
+      set({ cashFlowEntries: get().cashFlowEntries.map(e => e.id === id ? { ...e, ...data } : e) });
+    }
+  },
+
+  deleteCashFlowEntry: async (id) => {
+    const { error } = await supabase.from('cash_flow_entries').delete().eq('id', id);
+    if (error) throw error;
+    set({ cashFlowEntries: get().cashFlowEntries.filter(e => e.id !== id) });
+  },
+
+  // ─── Inventory Actions ─────────────────────────────────
+  fetchInventory: async () => {
+    const { currentTerreiroId } = get();
+    if (!currentTerreiroId) return;
+    const { data, error } = await supabaseRead
+      .from('inventory_items')
+      .select('*')
+      .eq('terreiro_id', currentTerreiroId)
+      .order('name', { ascending: true });
+    if (!error && data) {
+      set({ inventoryItems: data.map(dbToInventoryItem) });
+    }
+  },
+
+  addInventoryItem: async (item) => {
+    const { currentTerreiroId } = get();
+    if (!currentTerreiroId) return;
+    const { data, error } = await supabase
+      .from('inventory_items')
+      .insert({
+        terreiro_id: currentTerreiroId,
+        name: item.name,
+        category: item.category || '',
+        unit: item.unit || 'un',
+        current_stock: item.currentStock,
+        minimum_stock: item.minimumStock,
+        unit_price: item.unitPrice,
+        notes: item.notes || '',
+      })
+      .select()
+      .single();
+    if (!error && data) {
+      set({ inventoryItems: [...get().inventoryItems, dbToInventoryItem(data)].sort((a, b) => a.name.localeCompare(b.name)) });
+    }
+  },
+
+  updateInventoryItem: async (id, data) => {
+    const updateData: any = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.category !== undefined) updateData.category = data.category;
+    if (data.unit !== undefined) updateData.unit = data.unit;
+    if (data.currentStock !== undefined) updateData.current_stock = data.currentStock;
+    if (data.minimumStock !== undefined) updateData.minimum_stock = data.minimumStock;
+    if (data.unitPrice !== undefined) updateData.unit_price = data.unitPrice;
+    if (data.notes !== undefined) updateData.notes = data.notes;
+    const { error } = await supabase.from('inventory_items').update(updateData).eq('id', id);
+    if (!error) {
+      set({ inventoryItems: get().inventoryItems.map(i => i.id === id ? { ...i, ...data } : i) });
+    }
+  },
+
+  deleteInventoryItem: async (id) => {
+    const { error } = await supabase.from('inventory_items').delete().eq('id', id);
+    if (error) throw error;
+    set({ inventoryItems: get().inventoryItems.filter(i => i.id !== id) });
+  },
+
+  // ─── Shopping List Actions ─────────────────────────────
+  fetchShoppingList: async () => {
+    const { currentTerreiroId } = get();
+    if (!currentTerreiroId) return;
+    const { data, error } = await supabaseRead
+      .from('shopping_list_items')
+      .select('*')
+      .eq('terreiro_id', currentTerreiroId)
+      .order('created_at', { ascending: false });
+    if (!error && data) {
+      set({ shoppingListItems: data.map(dbToShoppingListItem) });
+    }
+  },
+
+  addShoppingListItem: async (item) => {
+    const { currentTerreiroId } = get();
+    if (!currentTerreiroId) return;
+    const { data, error } = await supabase
+      .from('shopping_list_items')
+      .insert({
+        terreiro_id: currentTerreiroId,
+        inventory_item_id: item.inventoryItemId || null,
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit || 'un',
+        estimated_price: item.estimatedPrice,
+        purchased: item.purchased ?? false,
+      })
+      .select()
+      .single();
+    if (!error && data) {
+      set({ shoppingListItems: [dbToShoppingListItem(data), ...get().shoppingListItems] });
+    }
+  },
+
+  updateShoppingListItem: async (id, data) => {
+    const updateData: any = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.quantity !== undefined) updateData.quantity = data.quantity;
+    if (data.unit !== undefined) updateData.unit = data.unit;
+    if (data.estimatedPrice !== undefined) updateData.estimated_price = data.estimatedPrice;
+    if (data.purchased !== undefined) updateData.purchased = data.purchased;
+    const { error } = await supabase.from('shopping_list_items').update(updateData).eq('id', id);
+    if (!error) {
+      set({ shoppingListItems: get().shoppingListItems.map(i => i.id === id ? { ...i, ...data } : i) });
+    }
+  },
+
+  deleteShoppingListItem: async (id) => {
+    const { error } = await supabase.from('shopping_list_items').delete().eq('id', id);
+    if (error) throw error;
+    set({ shoppingListItems: get().shoppingListItems.filter(i => i.id !== id) });
+  },
+
+  toggleShoppingItemPurchased: async (id) => {
+    const item = get().shoppingListItems.find(i => i.id === id);
+    if (!item) return;
+    const newVal = !item.purchased;
+    const { error } = await supabase.from('shopping_list_items').update({ purchased: newVal }).eq('id', id);
+    if (!error) {
+      set({ shoppingListItems: get().shoppingListItems.map(i => i.id === id ? { ...i, purchased: newVal } : i) });
+    }
+  },
+
   resetStore: () => {
     localStorage.removeItem('terreiro-session');
     localStorage.removeItem('terreiro-theme');
@@ -1591,6 +1876,9 @@ export const useStore = create<AppState>()((set, get) => ({
       events: [],
       charges: [],
       bankAccounts: [],
+      cashFlowEntries: [],
+      inventoryItems: [],
+      shoppingListItems: [],
       currentUser: null,
       currentTerreiroId: null,
       isLoading: false,
