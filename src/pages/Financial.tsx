@@ -82,6 +82,7 @@ export default function Financial() {
 
   // ─── Inventory state ───────────────────────────────────
   const [inventorySubTab, setInventorySubTab] = useState<'ITEMS' | 'SHOPPING'>('ITEMS');
+  const [inventoryAddTarget, setInventoryAddTarget] = useState<'STOCK' | 'SHOPPING'>('STOCK');
   const [showInventoryForm, setShowInventoryForm] = useState(false);
   const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null);
   const [inventoryForm, setInventoryForm] = useState<Omit<InventoryItem, 'id' | 'terreiroId' | 'createdAt'>>({
@@ -975,14 +976,18 @@ export default function Financial() {
 
           const handleCashFlowSubmit = async (e: React.FormEvent) => {
             e.preventDefault();
-            if (editingCashFlow) {
-              await updateCashFlowEntry(editingCashFlow.id, cashFlowForm);
-            } else {
-              await addCashFlowEntry(cashFlowForm);
+            try {
+              if (editingCashFlow) {
+                await updateCashFlowEntry(editingCashFlow.id, cashFlowForm);
+              } else {
+                await addCashFlowEntry(cashFlowForm);
+              }
+              setShowCashFlowForm(false);
+              setEditingCashFlow(null);
+              setCashFlowForm({ type: 'recebimento', description: '', amount: 0, date: '', realized: false, notes: '' });
+            } catch {
+              alert('Erro ao salvar entrada. Verifique os dados e tente novamente.');
             }
-            setShowCashFlowForm(false);
-            setEditingCashFlow(null);
-            setCashFlowForm({ type: 'recebimento', description: '', amount: 0, date: '', realized: false, notes: '' });
           };
 
           return (
@@ -1120,14 +1125,27 @@ export default function Financial() {
 
           const handleInventorySubmit = async (e: React.FormEvent) => {
             e.preventDefault();
-            if (editingInventory) {
-              await updateInventoryItem(editingInventory.id, inventoryForm);
-            } else {
-              await addInventoryItem(inventoryForm);
+            try {
+              if (editingInventory) {
+                await updateInventoryItem(editingInventory.id, inventoryForm);
+              } else if (inventoryAddTarget === 'SHOPPING') {
+                await addShoppingListItem({
+                  name: inventoryForm.name,
+                  quantity: inventoryForm.minimumStock || 1,
+                  unit: inventoryForm.unit,
+                  estimatedPrice: inventoryForm.unitPrice,
+                  purchased: false,
+                });
+              } else {
+                await addInventoryItem(inventoryForm);
+              }
+              setShowInventoryForm(false);
+              setEditingInventory(null);
+              setInventoryForm({ name: '', category: '', unit: 'un', currentStock: 0, minimumStock: 0, unitPrice: 0, notes: '' });
+              setInventoryAddTarget('STOCK');
+            } catch {
+              alert('Erro ao salvar item. Verifique os dados e tente novamente.');
             }
-            setShowInventoryForm(false);
-            setEditingInventory(null);
-            setInventoryForm({ name: '', category: '', unit: 'un', currentStock: 0, minimumStock: 0, unitPrice: 0, notes: '' });
           };
 
           const handleShoppingSubmit = async (e: React.FormEvent) => {
@@ -1200,26 +1218,52 @@ export default function Financial() {
                         className="glass-panel"
                         style={{ padding: '1.5rem', borderRadius: 12, border: '1px solid var(--accent-gold, #e2b714)', display: 'flex', flexDirection: 'column', gap: '1rem', overflow: 'hidden' }}
                       >
-                        <h4 style={{ margin: 0, color: 'var(--accent-gold, #e2b714)' }}>{editingInventory ? 'Editar Item' : 'Novo Item de Estoque'}</h4>
+                        <h4 style={{ margin: 0, color: inventoryAddTarget === 'SHOPPING' ? 'var(--neon-cyan)' : 'var(--accent-gold, #e2b714)' }}>
+                          {editingInventory ? 'Editar Item' : inventoryAddTarget === 'SHOPPING' ? 'Adicionar à Lista de Compras' : 'Novo Item de Estoque'}
+                        </h4>
+
+                        {/* Seletor de destino — só aparece quando não está editando */}
+                        {!editingInventory && (
+                          <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(255,255,255,0.04)', padding: '0.3rem', borderRadius: 10, width: 'fit-content' }}>
+                            <button type="button" onClick={() => setInventoryAddTarget('STOCK')}
+                              style={{ padding: '0.45rem 1.1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: inventoryAddTarget === 'STOCK' ? 'var(--accent-gold, #e2b714)' : 'transparent', color: inventoryAddTarget === 'STOCK' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
+                              <Package size={14} /> Adicionar ao Estoque
+                            </button>
+                            <button type="button" onClick={() => setInventoryAddTarget('SHOPPING')}
+                              style={{ padding: '0.45rem 1.1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: inventoryAddTarget === 'SHOPPING' ? 'var(--neon-cyan)' : 'transparent', color: inventoryAddTarget === 'SHOPPING' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
+                              <ShoppingCart size={14} /> Adicionar à Lista de Compras
+                            </button>
+                          </div>
+                        )}
+
                         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem' }}>
                           <Input label="Nome *" placeholder="Ex: Vela branca" value={inventoryForm.name} onChange={v => setInventoryForm(f => ({ ...f, name: v }))} required />
                           <Input label="Categoria" placeholder="Ex: Velas" value={inventoryForm.category} onChange={v => setInventoryForm(f => ({ ...f, category: v }))} />
                           <Input label="Unidade" placeholder="un, kg, L..." value={inventoryForm.unit} onChange={v => setInventoryForm(f => ({ ...f, unit: v }))} />
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                          <Input label="Estoque Atual" type="number" value={inventoryForm.currentStock.toString()} onChange={v => setInventoryForm(f => ({ ...f, currentStock: Number(v) }))} />
-                          <Input label="Estoque Mínimo" type="number" value={inventoryForm.minimumStock.toString()} onChange={v => setInventoryForm(f => ({ ...f, minimumStock: Number(v) }))} />
-                          <Input label="Preço Unitário (R$)" type="number" value={inventoryForm.unitPrice.toString()} onChange={v => setInventoryForm(f => ({ ...f, unitPrice: Number(v) }))} />
-                        </div>
-                        <Input label="Observações" placeholder="Notas sobre o item..." value={inventoryForm.notes} onChange={v => setInventoryForm(f => ({ ...f, notes: v }))} />
+                        {inventoryAddTarget === 'STOCK' ? (
+                          <>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                              <Input label="Estoque Atual" type="number" value={inventoryForm.currentStock.toString()} onChange={v => setInventoryForm(f => ({ ...f, currentStock: Number(v) }))} />
+                              <Input label="Estoque Mínimo" type="number" value={inventoryForm.minimumStock.toString()} onChange={v => setInventoryForm(f => ({ ...f, minimumStock: Number(v) }))} />
+                              <Input label="Preço Unitário (R$)" type="number" value={inventoryForm.unitPrice.toString()} onChange={v => setInventoryForm(f => ({ ...f, unitPrice: Number(v) }))} />
+                            </div>
+                            <Input label="Observações" placeholder="Notas sobre o item..." value={inventoryForm.notes} onChange={v => setInventoryForm(f => ({ ...f, notes: v }))} />
+                          </>
+                        ) : (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <Input label="Quantidade" type="number" placeholder="1" value={inventoryForm.minimumStock.toString()} onChange={v => setInventoryForm(f => ({ ...f, minimumStock: Number(v) }))} />
+                            <Input label="Preço Estimado (R$)" type="number" placeholder="0.00" value={inventoryForm.unitPrice.toString()} onChange={v => setInventoryForm(f => ({ ...f, unitPrice: Number(v) }))} />
+                          </div>
+                        )}
                         <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end' }}>
                           <button type="button" onClick={() => { setShowInventoryForm(false); setEditingInventory(null); }}
                             style={{ padding: '0.7rem 1.5rem', border: '1px solid var(--glass-border)', borderRadius: 8, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}>
                             Cancelar
                           </button>
                           <button type="submit"
-                            style={{ padding: '0.7rem 1.5rem', border: 'none', borderRadius: 8, background: 'var(--accent-gold, #e2b714)', color: '#000', fontWeight: 'bold', cursor: 'pointer' }}>
-                            {editingInventory ? 'Salvar' : 'Adicionar Item'}
+                            style={{ padding: '0.7rem 1.5rem', border: 'none', borderRadius: 8, background: inventoryAddTarget === 'SHOPPING' ? 'var(--neon-cyan)' : 'var(--accent-gold, #e2b714)', color: '#000', fontWeight: 'bold', cursor: 'pointer' }}>
+                            {editingInventory ? 'Salvar' : inventoryAddTarget === 'SHOPPING' ? 'Adicionar à Lista' : 'Adicionar ao Estoque'}
                           </button>
                         </div>
                       </motion.form>

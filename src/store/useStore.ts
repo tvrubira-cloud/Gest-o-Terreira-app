@@ -1721,9 +1721,8 @@ export const useStore = create<AppState>()((set, get) => ({
       })
       .select()
       .single();
-    if (!error && data) {
-      set({ cashFlowEntries: [dbToCashFlowEntry(data), ...get().cashFlowEntries] });
-    }
+    if (error) throw error;
+    if (data) set({ cashFlowEntries: [dbToCashFlowEntry(data), ...get().cashFlowEntries] });
   },
 
   updateCashFlowEntry: async (id, data) => {
@@ -1777,9 +1776,8 @@ export const useStore = create<AppState>()((set, get) => ({
       })
       .select()
       .single();
-    if (!error && data) {
-      set({ inventoryItems: [...get().inventoryItems, dbToInventoryItem(data)].sort((a, b) => a.name.localeCompare(b.name)) });
-    }
+    if (error) throw error;
+    if (data) set({ inventoryItems: [...get().inventoryItems, dbToInventoryItem(data)].sort((a, b) => a.name.localeCompare(b.name)) });
   },
 
   updateInventoryItem: async (id, data) => {
