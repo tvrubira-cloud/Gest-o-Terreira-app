@@ -38,6 +38,11 @@ export default function Login() {
     }
 
     const result = await checkCpf(cpf);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
     if (result.exists) {
       setUserName(result.userName || '');
       if (result.hasPassword) {

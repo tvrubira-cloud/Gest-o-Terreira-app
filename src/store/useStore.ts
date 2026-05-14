@@ -299,7 +299,7 @@ interface AppState {
 
   // Actions
   initializeData: (forcedTerreiroId?: string) => Promise<void>;
-  checkCpf: (cpf: string) => Promise<{ exists: boolean; hasPassword: boolean; userName?: string }>;
+  checkCpf: (cpf: string) => Promise<{ exists: boolean; hasPassword: boolean; userName?: string; error?: string }>;
   setupPassword: (cpf: string, password: string, palavraChave?: string) => Promise<boolean>;
   recoverPassword: (cpf: string, palavraChave: string, novaSenha: string) => Promise<boolean>;
   login: (cpf: string, password?: string) => Promise<boolean>;
@@ -448,6 +448,39 @@ function dbToBankAccount(row: any): BankAccount {
 // ─── Store ─────────────────────────────────────────────────────
 
 // ─── Helpers: Cash Flow / Inventory ───────────────────────────
+
+function normalizeCpfInput(cpf: string) {
+  const value = cpf.trim().toLowerCase();
+  const digits = value.replace(/\D/g, '');
+  const variants = new Set([value]);
+
+  if (digits) {
+    variants.add(digits);
+  }
+
+  if (digits.length === 11) {
+    variants.add(`${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`);
+  }
+
+  return { value, variants: Array.from(variants).filter(Boolean) };
+}
+
+async function findUserByCpf(cpf: string, columns = '*'): Promise<{ data: any | null; error: any | null }> {
+  const { variants } = normalizeCpfInput(cpf);
+
+  for (const variant of variants) {
+    const { data, error } = await supabase
+      .from('users')
+      .select(columns)
+      .ilike('cpf', variant)
+      .limit(1);
+
+    if (error) return { data: null, error };
+    if (data?.[0]) return { data: data[0], error: null };
+  }
+
+  return { data: null, error: null };
+}
 
 function dbToCashFlowEntry(row: any): CashFlowEntry {
   return {
@@ -704,14 +737,16 @@ export const useStore = create<AppState>()((set, get) => ({
   checkCpf: async (cpf) => {
     set({ isLoading: true });
     try {
-      const normalizedCpf = cpf.trim().toLowerCase();
-      const { data } = await supabase
-        .from('users')
-        .select('id, nome_completo, password')
-        .ilike('cpf', normalizedCpf)
-        .limit(1);
+      const { data: user, error } = await findUserByCpf(cpf, 'id, nome_completo, password');
+      if (error) {
+        console.error('Erro ao consultar CPF:', error.message);
+        return {
+          exists: false,
+          hasPassword: false,
+          error: `Erro ao consultar o banco de dados: ${error.message}. Verifique a conexão, DNS e permissões do Supabase.`
+        };
+      }
 
-      const user = data?.[0];
       return {
         exists: !!user,
         hasPassword: !!user?.password,
@@ -725,20 +760,22 @@ export const useStore = create<AppState>()((set, get) => ({
   setupPassword: async (cpf, password, palavraChave) => {
     set({ isLoading: true });
     try {
-      const normalizedCpf = cpf.trim().toLowerCase();
+      const { data: user, error: findError } = await findUserByCpf(cpf, 'id');
+      if (findError || !user) return false;
+
       const updateData: any = { password };
       if (palavraChave) updateData.palavra_chave = palavraChave.trim().toLowerCase();
 
       const { error } = await supabase
         .from('users')
         .update(updateData)
-        .ilike('cpf', normalizedCpf);
+        .eq('id', user.id);
 
       if (error) return false;
 
       // Update local state
       const users = get().users.map(u =>
-        u.cpf.trim().toLowerCase() === normalizedCpf
+        u.id === user.id
           ? { ...u, password, ...(palavraChave && { palavraChave: palavraChave.trim().toLowerCase() }) }
           : u
       );
@@ -752,17 +789,12 @@ export const useStore = create<AppState>()((set, get) => ({
   recoverPassword: async (cpf, palavraChave, novaSenha) => {
     set({ isLoading: true });
     try {
-      const normalizedCpf = cpf.trim().toLowerCase();
       const normalizedPalavra = palavraChave.trim().toLowerCase();
 
       // Check if user exists with matching palavra_chave
-      const { data } = await supabase
-        .from('users')
-        .select('id, palavra_chave')
-        .ilike('cpf', normalizedCpf)
-        .limit(1);
+      const { data: user, error: findError } = await findUserByCpf(cpf, 'id, palavra_chave');
+      if (findError) return false;
 
-      const user = data?.[0];
       if (!user || user.palavra_chave !== normalizedPalavra) return false;
 
       const { error } = await supabase
@@ -785,29 +817,23 @@ export const useStore = create<AppState>()((set, get) => ({
   login: async (cpf, password) => {
     set({ isLoading: true });
     try {
-      const normalizedCpf = cpf.trim().toLowerCase();
-
-      // Ensure data is loaded
-      if (!get().initialized) {
-        await get().initializeData();
+      const { data: row, error } = await findUserByCpf(cpf);
+      if (error) {
+        console.error('Erro ao consultar login:', error.message);
+        return false;
       }
 
-      const { data } = await supabase
-        .from('users')
-        .select('*')
-        .ilike('cpf', normalizedCpf)
-        .limit(1);
-
-      const row = data?.[0];
       if (row && row.password && row.password === password) {
         const user = dbToUser(row);
-        set({ currentUser: user, currentTerreiroId: user.terreiroId });
+        const terreiroId = user.terreiroId || null;
+        set({ currentUser: user, currentTerreiroId: terreiroId, initialized: false });
         
-        // Reload data with the now-known terreiroId
-        await get().initializeData(user.terreiroId);
+        // Reload data with the authenticated user context. Masters can exist
+        // without a terreiro_id, so this must run even when terreiroId is null.
+        await get().initializeData(terreiroId || undefined);
 
         // Save session in localStorage for persistence
-        localStorage.setItem('terreiro-session', JSON.stringify({ userId: user.id, terreiroId: user.terreiroId }));
+        localStorage.setItem('terreiro-session', JSON.stringify({ userId: user.id, terreiroId }));
         return true;
       }
       return false;
