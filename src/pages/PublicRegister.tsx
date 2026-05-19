@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { defaultSpiritualData } from '../store/useStore';
-
-type Step = 'form' | 'success';
+import { supabase } from '../lib/supabase';
 
 export default function PublicRegister() {
   const navigate = useNavigate();
@@ -13,7 +12,7 @@ export default function PublicRegister() {
   const registerTerreiro = useStore((s) => s.registerTerreiro);
   const isLoading = useStore((s) => s.isLoading);
 
-  const [step, setStep] = useState<Step>('form');
+  const [step] = useState<'form' | 'success'>('form');
   const [error, setError] = useState('');
 
   // Campos do formulário
@@ -40,6 +39,33 @@ export default function PublicRegister() {
     rede: 'Plano Rede de Ilês',
   };
 
+  const cpfDigits = cpf.replace(/\D/g, '');
+
+  const formatCpf = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    return digits
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  };
+
+  const sendCredentialsEmail = async () => {
+    const { error } = await supabase.functions.invoke('send-credentials-email', {
+      body: {
+        email: email.trim().toLowerCase(),
+        nomeCompleto: nomeCompleto.trim(),
+        nomeTerreiro: nomeTerreiro.trim(),
+        cpf: cpfDigits,
+        senha,
+        loginUrl: `${window.location.origin}/login`,
+      },
+    });
+
+    if (error) {
+      console.warn('[PublicRegister] Falha ao enviar email de credenciais:', error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -49,8 +75,8 @@ export default function PublicRegister() {
       return;
     }
 
-    if (cpf.trim().length < 3) {
-      setError('Informe um CPF ou login válido.');
+    if (cpfDigits.length !== 11) {
+      setError('Informe um CPF valido com 11 digitos.');
       return;
     }
 
@@ -91,7 +117,7 @@ export default function PublicRegister() {
         outrasTradicoesTexto: outrasTradicoesTexto.trim(),
       },
       {
-        cpf: cpf.trim().toLowerCase(), // login — CPF ou string livre
+        cpf: cpfDigits,
         password: senha,
         nomeCompleto: nomeCompleto.trim(),
         nomeDeSanto: '',
@@ -118,9 +144,12 @@ export default function PublicRegister() {
     );
 
     if (success) {
-      setStep('success');
+      await sendCredentialsEmail();
+      localStorage.setItem('orun_saved_cpf', cpfDigits);
+      localStorage.setItem('orun_remember_cpf', 'true');
+      navigate('/login');
     } else {
-      setError('Este CPF/login já está em uso. Tente outro ou faça login.');
+      setError('Este CPF ja esta em uso. Tente outro ou faca login.');
     }
   };
 
@@ -264,21 +293,22 @@ export default function PublicRegister() {
             />
           </div>
 
-          {/* CPF / Login */}
+          {/* CPF para login */}
           <div>
-            <label style={labelStyle}>CPF ou login *</label>
+            <label style={labelStyle}>CPF para login *</label>
             <input
               type="text"
-              placeholder="000.000.000-00 ou nome de usuário"
+              placeholder="000.000.000-00"
               value={cpf}
-              onChange={(e) => { setCpf(e.target.value); setError(''); }}
+              onChange={(e) => { setCpf(formatCpf(e.target.value)); setError(''); }}
               onFocus={onFocus} onBlur={onBlur}
               style={inputStyle}
+              inputMode="numeric"
               autoComplete="username"
               required
             />
             <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', marginTop: 4, display: 'block' }}>
-              Será usado para entrar no app. Pode ser CPF ou qualquer login de sua escolha.
+              Será usado para entrar no app junto com a senha.
             </span>
           </div>
 
@@ -296,7 +326,7 @@ export default function PublicRegister() {
               required
             />
             <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', marginTop: 4, display: 'block' }}>
-              Para contato e recuperação de acesso. Não é usado para login.
+              As credenciais de acesso serão enviadas para este e-mail.
             </span>
           </div>
 
