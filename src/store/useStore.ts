@@ -262,9 +262,10 @@ interface AppState {
   events: Event[];
   broadcasts: Broadcast[];
   charges: Charge[];
-  bankAccounts: BankAccount[];
+bankAccounts: BankAccount[];
   currentUser: User | null;
   currentTerreiroId: string | null;
+  alternateTerreiros: { terreiroId: string; role: string; userId: string }[];
   isLoading: boolean;
   masterPixKey: string;
   setMasterPixKey: (key: string) => void;
@@ -505,6 +506,22 @@ async function findUserByCpf(cpf: string, columns = '*'): Promise<{ data: any | 
   return { data: null, error: null };
 }
 
+async function findAllUsersByCpf(cpf: string): Promise<{ data: any[] | null; error: any | null }> {
+  const { variants } = normalizeCpfInput(cpf);
+
+  for (const variant of variants) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, cpf, nome_completo, nome_de_santo, role, terreiro_id, password')
+      .ilike('cpf', variant);
+
+    if (error) return { data: null, error };
+    if (data && data.length > 0) return { data, error: null };
+  }
+
+  return { data: null, error: null };
+}
+
 function dbToCashFlowEntry(row: any): CashFlowEntry {
   return {
     id: row.id,
@@ -560,6 +577,7 @@ export const useStore = create<AppState>()((set, get) => ({
   shoppingListItems: [],
   currentUser: null,
   currentTerreiroId: null,
+  alternateTerreiros: [],
   isLoading: false,
   theme: (localStorage.getItem('terreiro-theme') as 'dark' | 'light') || 'dark',
   masterPixKey: 'financeiro@orunapp.com.br',
@@ -728,10 +746,19 @@ export const useStore = create<AppState>()((set, get) => ({
   },
 
   getUserTerreiros: () => {
-    const { currentUser, terreiros } = get();
+    const { currentUser, terreiros, alternateTerreiros } = get();
     if (!currentUser) return [];
     if (currentUser.isMaster || currentUser.isPanelAdmin) return terreiros;
-    return terreiros.filter(t => t.id === currentUser.terreiroId);
+
+    const mainTerreiros = terreiros.filter(t => t.id === currentUser.terreiroId);
+    
+    if (alternateTerreiros && alternateTerreiros.length > 0) {
+      const alternateIds = alternateTerreiros.map(at => at.terreiroId);
+      const altTerreiros = terreiros.filter(t => alternateIds.includes(t.id));
+      return [...mainTerreiros, ...altTerreiros];
+    }
+
+    return mainTerreiros;
   },
 
   getFilteredCharges: () => {
@@ -845,36 +872,57 @@ export const useStore = create<AppState>()((set, get) => ({
     }
   },
 
-  login: async (cpf, password) => {
+login: async (cpf, password) => {
     set({ isLoading: true });
     try {
-      const { data: row, error } = await findUserByCpf(cpf);
-      if (error) {
-        console.error('Erro ao consultar login:', error.message);
+      const { data: allUsers, error: searchError } = await findAllUsersByCpf(cpf);
+      if (searchError) {
+        console.error('Erro ao consultar login:', searchError.message);
         return false;
       }
 
-      if (row && row.password && row.password === password) {
-        const user = dbToUser(row);
-        const terreiroId = user.terreiroId || null;
-        set({ currentUser: user, currentTerreiroId: terreiroId, initialized: false });
-        
-        // Reload data with the authenticated user context. Masters can exist
-        // without a terreiro_id, so this must run even when terreiroId is null.
-        await get().initializeData(terreiroId || undefined);
-
-        // Save session in localStorage for persistence
-        localStorage.setItem('terreiro-session', JSON.stringify({ userId: user.id, terreiroId }));
-        return true;
+      if (!allUsers || allUsers.length === 0) {
+        return false;
       }
-      return false;
+
+      const validUser = allUsers.find(u => u.password && u.password === password);
+      if (!validUser) {
+        return false;
+      }
+
+      const user = dbToUser(validUser);
+      const terreiroId = user.terreiroId || null;
+
+      const alternateTerreiros = allUsers
+        .filter(u => u.terreiro_id && u.terreiro_id !== terreiroId)
+        .map(u => ({
+          terreiroId: u.terreiro_id,
+          role: u.role,
+          userId: u.id,
+        }));
+
+      set({ 
+        currentUser: user, 
+        currentTerreiroId: terreiroId, 
+        alternateTerreiros,
+        initialized: false 
+      });
+
+      await get().initializeData(terreiroId || undefined);
+
+      localStorage.setItem('terreiro-session', JSON.stringify({ 
+        userId: user.id, 
+        terreiroId,
+        alternateTerreiros 
+      }));
+      return true;
     } finally {
       set({ isLoading: false });
     }
   },
 
   logout: () => {
-    set({ currentUser: null, currentTerreiroId: null });
+    set({ currentUser: null, currentTerreiroId: null, alternateTerreiros: [] });
     localStorage.removeItem('terreiro-session');
   },
 
