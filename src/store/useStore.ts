@@ -323,6 +323,17 @@ interface AppState {
     terreiroData: { name: string; endereco: string; cep?: string; cidade?: string; estado?: string; segmentoUmbanda?: boolean; segmentoKimbanda?: boolean; segmentoNacao?: boolean; segmentoCandomble?: boolean; segmentoOutras?: boolean; outrasTradicoesTexto?: string },
     adminData: Omit<User, 'id' | 'createdAt' | 'terreiroId' | 'role'>
   ) => Promise<boolean>;
+  checkExistingCpfWithTerreiros: (cpf: string) => Promise<{
+    exists: boolean;
+    users: { id: string; nomeCompleto: string; nomeDeSanto: string; terreiroId: string; terreiroName: string; role: string }[];
+    error?: string;
+  }>;
+  migrateUserToTerreiro: (
+    cpf: string,
+    terreiroId: string,
+    keepInOldTerreiro: boolean,
+    userData: { nomeCompleto: string; nomeDeSanto?: string; dataNascimento?: string; rg?: string; endereco?: string; telefone?: string; email?: string; profissao?: string; nomePais?: string; spiritual?: any }
+  ) => Promise<{ success: boolean; error?: string }>;
   addUser: (userData: Omit<User, 'id' | 'createdAt' | 'terreiroId'>) => Promise<void>;
   updateUser: (id: string, userData: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
@@ -1094,6 +1105,111 @@ export const useStore = create<AppState>()((set, get) => ({
         users: [...get().users, dbToUser(newAdmin)],
       });
       return true;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  checkExistingCpfWithTerreiros: async (cpf) => {
+    try {
+      const { data: existingUsers, error } = await supabase
+        .from('users')
+        .select('id, cpf, nome_completo, nome_de_santo, terreiro_id, role')
+        .ilike('cpf', cpf.trim().toLowerCase());
+
+      if (error) {
+        return { exists: false, users: [], error: error.message };
+      }
+
+      if (!existingUsers || existingUsers.length === 0) {
+        return { exists: false, users: [], error: undefined };
+      }
+
+      const terreiroIds = [...new Set(existingUsers.map(u => u.terreiro_id).filter(Boolean))];
+      const { data: terreiros, error: terreiroError } = await supabase
+        .from('terreiros')
+        .select('id, name')
+        .in('id', terreiroIds);
+
+      if (terreiroError) {
+        return { exists: true, users: [], error: terreiroError.message };
+      }
+
+      const terreiroMap = new Map(terreiros?.map(t => [t.id, t.name]) || []);
+
+      const users = existingUsers.map(u => ({
+        id: u.id,
+        nomeCompleto: u.nome_completo || '',
+        nomeDeSanto: u.nome_de_santo || '',
+        terreiroId: u.terreiro_id || '',
+        terreiroName: terreiroMap.get(u.terreiro_id) || 'Terreiro Desconhecido',
+        role: u.role || 'USER',
+      }));
+
+      return { exists: true, users, error: undefined };
+    } catch (err: any) {
+      return { exists: false, users: [], error: err.message };
+    }
+  },
+
+  migrateUserToTerreiro: async (cpf, terreiroId, keepInOldTerreiro, userData) => {
+    set({ isLoading: true });
+    try {
+      const { data: existingUsers, error: searchError } = await supabase
+        .from('users')
+        .select('id, nome_completo, nome_de_santo, email, telefone, endereco, rg, data_nascimento, profissao, nome_pais, spiritual, role')
+        .ilike('cpf', cpf.trim().toLowerCase())
+        .limit(1);
+
+      if (searchError) {
+        return { success: false, error: searchError.message };
+      }
+
+      if (!existingUsers || existingUsers.length === 0) {
+        return { success: false, error: 'Usuário não encontrado' };
+      }
+
+      const existingUser = existingUsers[0];
+
+      const spiritualWithRole = {
+        ...defaultSpiritualData,
+        ...(existingUser.spiritual || {}),
+        ...(userData.spiritual || {}),
+        appRole: userData.role || 'USER',
+      };
+
+      const { data: newUser, error: insertError } = await supabase
+        .from('users')
+        .insert({
+          role: userData.role || existingUser.role || 'USER',
+          cpf: cpf,
+          password: null,
+          nome_completo: userData.nomeCompleto || existingUser.nome_completo,
+          nome_de_santo: userData.nomeDeSanto || existingUser.nome_de_santo || '',
+          data_nascimento: userData.dataNascimento || existingUser.data_nascimento || '',
+          rg: userData.rg || existingUser.rg || '',
+          endereco: userData.endereco || existingUser.endereco || '',
+          telefone: userData.telefone || existingUser.telefone || '',
+          email: userData.email || existingUser.email || '',
+          profissao: userData.profissao || existingUser.profissao || '',
+          nome_pais: userData.nomePais || existingUser.nome_pais || '',
+          spiritual: spiritualWithRole,
+          terreiro_id: terreiroId,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        return { success: false, error: insertError.message };
+      }
+
+      if (newUser) {
+        set({ users: [...get().users, dbToUser(newUser)] });
+      }
+
+      return { success: true, error: undefined };
+    } catch (err: any) {
+      return { success: false, error: err.message };
     } finally {
       set({ isLoading: false });
     }

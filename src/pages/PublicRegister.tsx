@@ -4,16 +4,29 @@ import { useStore } from '../store/useStore';
 import { defaultSpiritualData } from '../store/useStore';
 import { supabase } from '../lib/supabase';
 
+interface ExistingUser {
+  id: string;
+  nomeCompleto: string;
+  nomeDeSanto: string;
+  terreiroId: string;
+  terreiroName: string;
+  role: string;
+}
+
 export default function PublicRegister() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const plano = searchParams.get('plano') || 'trial'; // trial | basico | profissional | rede
+  const plano = searchParams.get('plano') || 'trial';
 
   const registerTerreiro = useStore((s) => s.registerTerreiro);
+  const checkExistingCpfWithTerreiros = useStore((s) => s.checkExistingCpfWithTerreiros);
+  const migrateUserToTerreiro = useStore((s) => s.migrateUserToTerreiro);
   const isLoading = useStore((s) => s.isLoading);
 
-  const [step] = useState<'form' | 'success'>('form');
+  const [step] = useState<'form' | 'success' | 'migrate'>('form');
   const [error, setError] = useState('');
+  const [cpfChecked, setCpfChecked] = useState(false);
+  const [existingUsers, setExistingUsers] = useState<ExistingUser[]>([]);
 
   // Campos do formulário
   const [nomeCompleto, setNomeCompleto] = useState('');
@@ -23,6 +36,11 @@ export default function PublicRegister() {
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
+
+  // Estados para migração
+  const [selectedTerreiroId, setSelectedTerreiroId] = useState<string>('');
+  const [keepInOldTerreiro, setKeepInOldTerreiro] = useState(true);
+  const [isMigrating, setIsMigrating] = useState(false);
 
   // Tradição
   const [segmentoUmbanda, setSegmentoUmbanda] = useState(true);
@@ -66,6 +84,157 @@ export default function PublicRegister() {
     }
   };
 
+  const handleCpfBlur = async () => {
+    if (cpfDigits.length !== 11) {
+      setCpfChecked(false);
+      setExistingUsers([]);
+      return;
+    }
+
+    const result = await checkExistingCpfWithTerreiros(cpfDigits);
+    if (result.exists && result.users && result.users.length > 0) {
+      setExistingUsers(result.users);
+      setCpfChecked(true);
+    } else {
+      setCpfChecked(false);
+      setExistingUsers([]);
+    }
+  };
+
+  const handleMigrate = async () => {
+    if (!selectedTerreiroId) {
+      setError('Selecione um terreiro para continuar.');
+      return;
+    }
+
+    setIsMigrating(true);
+    setError('');
+
+    try {
+      const result = await migrateUserToTerreiro(
+        cpfDigits,
+        selectedTerreiroId,
+        keepInOldTerreiro,
+        {
+          nomeCompleto: nomeCompleto.trim(),
+          nomeDeSanto: '',
+          dataNascimento: '',
+          rg: '',
+          endereco: '',
+          telefone: '',
+          email: email.trim().toLowerCase(),
+          profissao: '',
+          nomePais: '',
+          spiritual: {
+            ...defaultSpiritualData,
+            situacaoCadastro: 'ativo',
+            segmentoUmbanda,
+            segmentoKimbanda,
+            segmentoNacao,
+            segmentoCandomble,
+            segmentoOutras,
+            outrasTradicoesTexto: outrasTradicoesTexto.trim(),
+            tipoMedium: 'Sacerdote',
+          },
+        }
+      );
+
+      if (result.success) {
+        localStorage.setItem('orun_saved_cpf', cpfDigits);
+        localStorage.setItem('orun_remember_cpf', 'true');
+        navigate('/login');
+      } else {
+        setError(result.error || 'Erro ao migrar usuário.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Erro ao migrar usuário.');
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
+  const handleCreateNewTerreiro = async () => {
+    if (!nomeTerreiro.trim()) {
+      setError('Informe o nome do novo terreiro.');
+      return;
+    }
+
+    setIsMigrating(true);
+    setError('');
+
+    try {
+      const success = await registerTerreiro(
+        {
+          name: nomeTerreiro.trim(),
+          endereco: '',
+          segmentoUmbanda,
+          segmentoKimbanda,
+          segmentoNacao,
+          segmentoCandomble,
+          segmentoOutras,
+          outrasTradicoesTexto: outrasTradicoesTexto.trim(),
+        },
+        {
+          cpf: cpfDigits,
+          password: senha,
+          nomeCompleto: nomeCompleto.trim(),
+          nomeDeSanto: '',
+          dataNascimento: '',
+          rg: '',
+          endereco: '',
+          telefone: '',
+          email: email.trim().toLowerCase(),
+          whatsapp: '',
+          profissao: '',
+          nomePais: '',
+          spiritual: {
+            ...defaultSpiritualData,
+            situacaoCadastro: 'ativo',
+            segmentoUmbanda,
+            segmentoKimbanda,
+            segmentoNacao,
+            segmentoCandomble,
+            segmentoOutras,
+            outrasTradicoesTexto: outrasTradicoesTexto.trim(),
+            tipoMedium: 'Sacerdote',
+          },
+        }
+      );
+
+      if (success) {
+        if (keepInOldTerreiro && existingUsers.length > 0) {
+          for (const existingUser of existingUsers) {
+            await migrateUserToTerreiro(
+              cpfDigits,
+              existingUser.terreiroId,
+              true,
+              {
+                nomeCompleto: nomeCompleto.trim(),
+              }
+            );
+          }
+        }
+
+        await sendCredentialsEmail();
+        localStorage.setItem('orun_saved_cpf', cpfDigits);
+        localStorage.setItem('orun_remember_cpf', 'true');
+        navigate('/login');
+      } else {
+        setError('Erro ao criar novo terreiro.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Erro ao criar novo terreiro.');
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
+  const resetToForm = () => {
+    setExistingUsers([]);
+    setCpfChecked(false);
+    setError('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -102,6 +271,12 @@ export default function PublicRegister() {
 
     if (segmentoOutras && !outrasTradicoesTexto.trim()) {
       setError('Informe qual é a outra tradição praticada.');
+      return;
+    }
+
+    const existingCheck = await checkExistingCpfWithTerreiros(cpfDigits);
+    if (existingCheck.exists && existingCheck.users && existingCheck.users.length > 0) {
+      setExistingUsers(existingCheck.users);
       return;
     }
 
@@ -235,6 +410,162 @@ export default function PublicRegister() {
     );
   }
 
+  /* ── Tela de migração (CPF já existente) ── */
+  if (existingUsers.length > 0) {
+    const uniqueTerreiros = existingUsers.filter((v, i, a) => a.findIndex(t => t.terreiroId === v.terreiroId) === i);
+
+    return (
+      <div style={pageStyle}>
+        <div style={cardStyle}>
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%', margin: '0 auto 16px',
+              background: 'linear-gradient(135deg, rgba(201,168,76,0.4), rgba(10,74,77,0.2))',
+              border: '2px solid rgba(201,168,76,0.6)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 28,
+            }}>⚠</div>
+            <h1 style={{ ...titleStyle, fontSize: '1.5rem', marginBottom: 8 }}>
+              CPF já cadastrado
+            </h1>
+            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.95rem', lineHeight: 1.7 }}>
+              Você já possui cadastro no sistema. O que gostaria de fazer?
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
+            <div style={{ padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)' }}>
+              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', marginBottom: 12, fontWeight: 600 }}>
+                Seus terreiros atuais:
+              </p>
+              {uniqueTerreiros.map((user) => (
+                <div key={user.terreiroId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <input
+                    type="radio"
+                    name="selectedTerreiro"
+                    value={user.terreiroId}
+                    checked={selectedTerreiroId === user.terreiroId}
+                    onChange={(e) => setSelectedTerreiroId(e.target.value)}
+                    style={{ accentColor: '#0A4A4D' }}
+                  />
+                  <div>
+                    <span style={{ color: '#fff', fontSize: '0.95rem' }}>{user.terreiroName}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', marginLeft: 8 }}>
+                      ({user.nomeCompleto || 'Admin'})
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ padding: '16px', background: 'rgba(10,74,77,0.1)', borderRadius: 12, border: '1px solid rgba(10,74,77,0.3)' }}>
+              <p style={{ color: '#0A4A4D', fontSize: '0.9rem', marginBottom: 12, fontWeight: 600 }}>
+                Ou crie um novo terreiro:
+              </p>
+              <input
+                type="text"
+                placeholder="Nome do novo terreiro"
+                value={nomeTerreiro}
+                onChange={(e) => { setNomeTerreiro(e.target.value); setError(''); }}
+                style={inputStyle}
+              />
+            </div>
+
+            <div style={{ padding: '14px', background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={keepInOldTerreiro}
+                  onChange={(e) => setKeepInOldTerreiro(e.target.checked)}
+                  style={{ accentColor: '#0A4A4D', width: 18, height: 18 }}
+                />
+                <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem' }}>
+                  Manter meus dados também no terreiro antigo
+                </span>
+              </label>
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: 6, marginLeft: 28 }}>
+                Útil quando um filho de santo abre seu próprio terreiro
+              </p>
+            </div>
+          </div>
+
+          {error && (
+            <div style={{
+              background: 'rgba(255,76,76,0.08)',
+              border: '1px solid rgba(255,76,76,0.25)',
+              borderRadius: 10,
+              padding: '12px 16px',
+              color: '#ff6b6b',
+              fontSize: '0.875rem',
+              textAlign: 'center',
+              marginBottom: 16,
+            }}>
+              {error}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {selectedTerreiroId ? (
+              <button
+                type="button"
+                onClick={handleMigrate}
+                disabled={isMigrating}
+                style={{
+                  ...btnPrimaryStyle,
+                  opacity: isMigrating ? 0.7 : 1,
+                  cursor: isMigrating ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isMigrating ? 'Migrando...' : '✦ Entrar no Terreiro Selecionado'}
+              </button>
+            ) : nomeTerreiro.trim() ? (
+              <button
+                type="button"
+                onClick={handleCreateNewTerreiro}
+                disabled={isMigrating || !nomeTerreiro.trim() || !senha || senha.length < 6}
+                style={{
+                  ...btnPrimaryStyle,
+                  opacity: (isMigrating || !nomeTerreiro.trim() || !senha || senha.length < 6) ? 0.7 : 1,
+                  cursor: (isMigrating || !nomeTerreiro.trim() || !senha || senha.length < 6) ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isMigrating ? 'Criando...' : '✦ Criar Novo Terreiro'}
+              </button>
+            ) : (
+              <div style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem' }}>
+                Selecione um terreiro ou informe o nome de um novo
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={resetToForm}
+              style={{
+                background: 'transparent',
+                color: 'rgba(255,255,255,0.5)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 14,
+                padding: '14px',
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+              }}
+            >
+              Voltar ao formulário
+            </button>
+          </div>
+
+          <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', marginTop: 20 }}>
+            Já tem conta?{' '}
+            <a href="/login" style={{ color: '#0A4A4D', textDecoration: 'underline' }}>
+              Entrar
+            </a>
+          </p>
+        </div>
+        <style>{globalStyle}</style>
+      </div>
+    );
+  }
+
   /* ── Formulário ── */
   return (
     <div style={pageStyle}>
@@ -300,13 +631,23 @@ export default function PublicRegister() {
               type="text"
               placeholder="000.000.000-00"
               value={cpf}
-              onChange={(e) => { setCpf(formatCpf(e.target.value)); setError(''); }}
-              onFocus={onFocus} onBlur={onBlur}
+              onChange={(e) => { setCpf(formatCpf(e.target.value)); setError(''); setExistingUsers([]); setCpfChecked(false); }}
+              onFocus={onFocus} onBlur={(e) => { onBlur(e); handleCpfBlur(); }}
               style={inputStyle}
               inputMode="numeric"
               autoComplete="username"
               required
             />
+            {cpfChecked && existingUsers.length > 0 && (
+              <div style={{ marginTop: 8, padding: '10px 14px', background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.3)', borderRadius: 8 }}>
+                <span style={{ color: '#C9A84C', fontSize: '0.85rem', fontWeight: 600 }}>
+                  ⚠️ CPF já cadastrado
+                </span>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginTop: 4 }}>
+                  Você já possui cadastro em: {existingUsers.map(u => u.terreiroName).join(', ')}
+                </p>
+              </div>
+            )}
             <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', marginTop: 4, display: 'block' }}>
               Será usado para entrar no app junto com a senha.
             </span>
