@@ -893,8 +893,14 @@ login: async (cpf, password) => {
       const user = dbToUser(validUser);
       const terreiroId = user.terreiroId || null;
 
+      const userSpiritual = validUser.spiritual || {};
+      const bloqueados = userSpiritual.vinculosAnterioresBloqueados || [];
+
       const alternateTerreiros = allUsers
-        .filter(u => u.terreiro_id && u.terreiro_id !== terreiroId)
+        .filter(u => {
+          if (!u.terreiro_id || u.terreiro_id === terreiroId) return false;
+          return !bloqueados.includes(u.terreiro_id);
+        })
         .map(u => ({
           terreiroId: u.terreiro_id,
           role: u.role,
@@ -1200,14 +1206,13 @@ login: async (cpf, password) => {
     }
   },
 
-  migrateUserToTerreiro: async (cpf, terreiroId, _keepInOldTerreiro, userData: any) => {
+  migrateUserToTerreiro: async (cpf, terreiroId, keepInOldTerreiro, userData: any) => {
     set({ isLoading: true });
     try {
       const { data: existingUsers, error: searchError } = await supabase
         .from('users')
-        .select('id, nome_completo, nome_de_santo, email, telefone, endereco, rg, data_nascimento, profissao, nome_pais, spiritual, role')
-        .ilike('cpf', cpf.trim().toLowerCase())
-        .limit(1);
+        .select('id, nome_completo, nome_de_santo, email, telefone, endereco, rg, data_nascimento, profissao, nome_pais, spiritual, role, terreiro_id')
+        .ilike('cpf', cpf.trim().toLowerCase());
 
       if (searchError) {
         return { success: false, error: searchError.message };
@@ -1219,11 +1224,18 @@ login: async (cpf, password) => {
 
       const existingUser = existingUsers[0];
 
+      let vinculosAnterioresBloqueados: string[] = [];
+      
+      if (!keepInOldTerreiro && existingUser.terreiro_id) {
+        vinculosAnterioresBloqueados = [existingUser.terreiro_id];
+      }
+
       const spiritualWithRole = {
         ...defaultSpiritualData,
         ...(existingUser.spiritual || {}),
         ...(userData.spiritual || {}),
         appRole: userData.role || 'USER',
+        vinculosAnterioresBloqueados: vinculosAnterioresBloqueados,
       };
 
       const { data: newUser, error: insertError } = await supabase
