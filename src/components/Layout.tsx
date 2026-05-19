@@ -4,7 +4,7 @@ import { LayoutDashboard, Users, Calendar, Settings, LogOut, Hexagon, Search, Be
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import bgImage from '../assets/bg.png';
-import logo from '../assets/logo.png';
+import logo from '../assets/nova logo.png';
 import '../App.css';
 import NotificationGate from './NotificationGate';
 
@@ -100,7 +100,7 @@ export default function Layout() {
         <aside className={`sidebar glass-panel ${mobileMenuOpen ? 'sidebar-open' : ''}`}>
           <div className="logo-container">
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-              <img src={logo} alt="ORUM.app" style={{ width: 60, height: 60, objectFit: 'contain', filter: 'url(#remove-black-bg)' }} />
+              <img src={logo} alt="ORUNAPP" style={{ width: 60, height: 60, objectFit: 'contain', filter: 'url(#remove-black-bg)' }} />
               <div style={{ width: '1px', height: '32px', background: 'var(--glass-border)' }}></div>
               {currentTerreiro?.logoUrl ? (
                  <img src={currentTerreiro.logoUrl} alt="Logo" style={{ width: 40, height: 40, borderRadius: 8 }} />

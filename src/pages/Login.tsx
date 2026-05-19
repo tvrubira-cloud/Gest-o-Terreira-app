@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import bgImage from '../assets/bg.png';
-import logo from '../assets/logo.png';
+import logo from '../assets/nova logo.png';
 import '../App.css';
 
 export default function Login() {
   const [step, setStep] = useState<'CPF' | 'PASSWORD' | 'SET_PASSWORD' | 'RECOVER_PASSWORD'>('CPF');
-  const [cpf, setCpf] = useState(() => localStorage.getItem('orum_saved_cpf') || '');
-  const [rememberCpf, setRememberCpf] = useState(() => localStorage.getItem('orum_remember_cpf') === 'true');
+  const [cpf, setCpf] = useState(() => localStorage.getItem('orun_saved_cpf') || '');
+  const [rememberCpf, setRememberCpf] = useState(() => localStorage.getItem('orun_remember_cpf') === 'true');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [palavraChave, setPalavraChave] = useState('');
@@ -30,11 +30,11 @@ export default function Login() {
     if (!cpf) return setError('Por favor, informe seu CPF.');
 
     if (rememberCpf) {
-      localStorage.setItem('orum_saved_cpf', cpf);
-      localStorage.setItem('orum_remember_cpf', 'true');
+      localStorage.setItem('orun_saved_cpf', cpf);
+      localStorage.setItem('orun_remember_cpf', 'true');
     } else {
-      localStorage.removeItem('orum_saved_cpf');
-      localStorage.removeItem('orum_remember_cpf');
+      localStorage.removeItem('orun_saved_cpf');
+      localStorage.removeItem('orun_remember_cpf');
     }
 
     const result = await checkCpf(cpf);
@@ -118,7 +118,7 @@ export default function Login() {
         <div style={{ textAlign: 'center' }}>
           <img 
             src={logo} 
-            alt="ORUM.app Logo" 
+            alt="ORUNAPP Logo" 
             style={{ 
               width: '240px', 
               height: 'auto', 

@@ -539,7 +539,7 @@ export const useStore = create<AppState>()((set, get) => ({
   currentTerreiroId: null,
   isLoading: false,
   theme: (localStorage.getItem('terreiro-theme') as 'dark' | 'light') || 'dark',
-  masterPixKey: 'financeiro@terreiras.app',
+  masterPixKey: 'financeiro@orunapp.com.br',
   initialized: false,
 
   setMasterPixKey: (key) => set({ masterPixKey: key }),
@@ -1428,7 +1428,7 @@ export const useStore = create<AppState>()((set, get) => ({
             for (const tid of terreiroIds) {
               const terreiro = terreiros.find(t => t.id === tid);
               if (!terreiro) continue;
-              const instanceName = `orum-${tid}`;
+              const instanceName = `orun-${tid}`;
               const config = { url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: instanceName };
               const members = users.filter(u => u.terreiroId === tid && (u.whatsapp || u.telefone));
               for (const member of members) {
@@ -1439,7 +1439,7 @@ export const useStore = create<AppState>()((set, get) => ({
               }
             }
           } else if (currentTerreiroId) {
-            const instanceName = `orum-${currentTerreiroId}`;
+            const instanceName = `orun-${currentTerreiroId}`;
             const config = { url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: instanceName };
             const members = users.filter(u => u.terreiroId === currentTerreiroId && (u.whatsapp || u.telefone));
             for (const member of members) {

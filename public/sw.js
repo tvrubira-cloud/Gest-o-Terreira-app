@@ -1,4 +1,4 @@
-// ─── Service Worker — Terreiras App ──────────────────────────
+// ─── Service Worker — OrunApp ──────────────────────────
 // Enables Web Push API support. Future: Firebase Cloud Messaging integration.
 
 self.addEventListener('install', (event) => {
@@ -14,12 +14,12 @@ self.addEventListener('activate', (event) => {
 // Handle push notifications from server
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
-  const title = data.title || 'Terreiras App';
+  const title = data.title || 'OrunApp';
   const options = {
     body: data.body || 'Você tem uma nova notificação.',
     icon: '/favicon.svg',
     badge: '/favicon.svg',
-    tag: data.tag || 'terreiras-notification',
+    tag: data.tag || 'orunapp-notification',
     data: { url: data.url || '/' },
     vibrate: [200, 100, 200],
     requireInteraction: false,

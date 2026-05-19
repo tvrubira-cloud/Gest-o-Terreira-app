@@ -65,7 +65,7 @@ function now(): string {
 /** Monta o evento padronizado para todos os destinos. */
 function buildChangeEvent(payload: WebhookPayload) {
   return {
-    source:     'terreiras-app',
+    source:     'orunapp',
     schema:     payload.schema,
     table:      payload.table,
     event:      payload.type,

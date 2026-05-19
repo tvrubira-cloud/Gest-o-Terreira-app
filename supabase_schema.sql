@@ -1,7 +1,5 @@
 -- =============================================
 -- Terreiro App — Supabase Database Schema
--- Execute este SQL no painel do Supabase:
--- SQL Editor → New Query → Colar → Run
 -- =============================================
 
 -- 1. Terreiros
@@ -82,23 +80,19 @@ CREATE TABLE IF NOT EXISTS bank_accounts (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 6. Broadcasts (Comunicados)
+-- 6. Broadcasts
 CREATE TABLE IF NOT EXISTS broadcasts (
-  id          TEXT PRIMARY KEY DEFAULT ('broadcast-' || gen_random_uuid()::text),
+  id TEXT PRIMARY KEY DEFAULT ('broadcast-' || gen_random_uuid()::text),
   terreiro_id TEXT REFERENCES terreiros(id) ON DELETE CASCADE,
-  title       TEXT NOT NULL,
-  body        TEXT NOT NULL,
-  url         TEXT DEFAULT '',
-  is_global   BOOLEAN DEFAULT false,
-  created_by  TEXT DEFAULT '',
-  created_at  TIMESTAMPTZ DEFAULT now()
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  url TEXT DEFAULT '',
+  is_global BOOLEAN DEFAULT false,
+  created_by TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS broadcasts_terreiro_idx   ON broadcasts (terreiro_id);
-CREATE INDEX IF NOT EXISTS broadcasts_is_global_idx  ON broadcasts (is_global);
-CREATE INDEX IF NOT EXISTS broadcasts_created_at_idx ON broadcasts (created_at DESC);
-
--- 7. Push Tokens (FCM)
+-- 7. Push Tokens
 CREATE TABLE IF NOT EXISTS push_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -110,14 +104,14 @@ CREATE TABLE IF NOT EXISTS push_tokens (
   UNIQUE (device_id, user_id, terreiro_id)
 );
 
+-- Índices
+CREATE INDEX IF NOT EXISTS broadcasts_terreiro_idx ON broadcasts (terreiro_id);
+CREATE INDEX IF NOT EXISTS broadcasts_is_global_idx ON broadcasts (is_global);
+CREATE INDEX IF NOT EXISTS broadcasts_created_at_idx ON broadcasts (created_at DESC);
 CREATE INDEX IF NOT EXISTS push_tokens_terreiro_idx ON push_tokens (terreiro_id);
-CREATE INDEX IF NOT EXISTS push_tokens_user_idx     ON push_tokens (user_id);
+CREATE INDEX IF NOT EXISTS push_tokens_user_idx ON push_tokens (user_id);
 
-
--- =============================================
--- Row Level Security (RLS) — desabilitado para
--- permitir acesso com anon key por enquanto
--- =============================================
+-- RLS
 ALTER TABLE terreiros ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
@@ -125,18 +119,15 @@ ALTER TABLE charges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bank_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE push_tokens ENABLE ROW LEVEL SECURITY;
 
--- Políticas permissivas (acesso total via anon key)
-CREATE POLICY "Allow all for terreiros"    ON terreiros    FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for users"        ON users        FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for events"       ON events       FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for charges"      ON charges      FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for terreiros" ON terreiros FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for users" ON users FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for events" ON events FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for charges" ON charges FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for bank_accounts" ON bank_accounts FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for broadcasts"   ON broadcasts   FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for push_tokens"  ON push_tokens  FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for broadcasts" ON broadcasts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for push_tokens" ON push_tokens FOR ALL USING (true) WITH CHECK (true);
 
--- =============================================
--- Seed: Master Admin + Terreiro inicial
--- =============================================
+-- Seed
 INSERT INTO terreiros (id, name, logo_url, endereco, admin_id)
 VALUES ('terreiro-001', 'master terreira', '', '', 'user-admin-001')
 ON CONFLICT (id) DO NOTHING;

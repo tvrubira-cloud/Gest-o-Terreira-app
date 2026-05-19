@@ -121,7 +121,7 @@ export default function Broadcast() {
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://orum.app/dashboard"
+                placeholder="https://orunapp.com.br/dashboard"
                 className="glass-input"
               />
             </div>

@@ -617,9 +617,9 @@ export default function Financial() {
                                       <h4 style={{ color: 'var(--neon-cyan)', margin: 0 }}>Pagar via PIX</h4>
                                       <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>Valor: <strong>{formatCurrency(charge.amount)}</strong></p>
                                       <div style={{ background: '#fff', padding: '1rem', borderRadius: 12 }}>
-                                        <QRCodeSVG value={generatePixPayload(masterPixKey, 'ORUM Sistema', 'BRASIL', charge.id, charge.amount)} size={180} level="M" />
+                                        <QRCodeSVG value={generatePixPayload(masterPixKey, 'ORUN Sistema', 'BRASIL', charge.id, charge.amount)} size={180} level="M" />
                                       </div>
-                                      <button onClick={() => { navigator.clipboard.writeText(generatePixPayload(masterPixKey, 'ORUM Sistema', 'BRASIL', charge.id, charge.amount)); alert('Código PIX copiado!'); }}
+                                      <button onClick={() => { navigator.clipboard.writeText(generatePixPayload(masterPixKey, 'ORUN Sistema', 'BRASIL', charge.id, charge.amount)); alert('Código PIX copiado!'); }}
                                         style={{ background: 'var(--neon-cyan)', border: 'none', color: '#000', padding: '0.8rem 1.5rem', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}>
                                         <Copy size={18} /> PIX Copia e Cola
                                       </button>

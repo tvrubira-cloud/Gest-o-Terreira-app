@@ -31,12 +31,12 @@ if (messaging) {
     const notification = payload.notification ?? {};
     const data         = payload.data ?? {};
 
-    const title   = notification.title || data.title || 'Terreiras App';
+    const title   = notification.title || data.title || 'OrunApp';
     const options  = {
       body:             notification.body  || data.body  || 'Você tem uma nova notificação.',
       icon:             notification.icon  || '/favicon.svg',
       badge:            '/favicon.svg',
-      tag:              data.tag           || 'terreiras-push',
+      tag:              data.tag           || 'orunapp-push',
       data:             { url: data.url   || '/' },
       vibrate:          [200, 100, 200],
       requireInteraction: false,

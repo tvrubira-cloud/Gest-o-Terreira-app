@@ -140,7 +140,7 @@ export default function Dashboard() {
         <div className="banner-text">
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
             <div style={{ position: 'relative' }}>
-              <img src={logo} alt="ORUM.app" style={{ width: 80, height: 80, borderRadius: 16, filter: 'url(#remove-black-bg) drop-shadow(0 0 15px rgba(0, 240, 255, 0.5))' }} />
+              <img src={logo} alt="ORUN.app" style={{ width: 80, height: 80, borderRadius: 16, filter: 'url(#remove-black-bg) drop-shadow(0 0 15px rgba(0, 240, 255, 0.5))' }} />
               <Sparkles size={24} color="var(--neon-cyan)" style={{ position: 'absolute', top: -12, right: -12 }} className="glow-icon" />
             </div>
             <h2 className="text-gradient" style={{ fontSize: '2.2rem' }}>Bem-vindo(a), <span>{currentUser.nomeCompleto}</span></h2>

@@ -11,7 +11,7 @@ interface NotificationGateProps {
   children: React.ReactNode;
 }
 
-const STORAGE_KEY = 'terreiras-notifications-granted';
+const STORAGE_KEY = 'orunapp-notifications-granted';
 
 type Status = 'checking' | 'gate' | 'denied' | 'granted';
 
@@ -35,10 +35,10 @@ export default function NotificationGate({ children }: NotificationGateProps) {
       if (!token) return;
 
       // Stable device id so we can upsert without duplicates
-      let deviceId = localStorage.getItem('terreiras-device-id');
+      let deviceId = localStorage.getItem('orunapp-device-id');
       if (!deviceId) {
         deviceId = crypto.randomUUID();
-        localStorage.setItem('terreiras-device-id', deviceId);
+        localStorage.setItem('orunapp-device-id', deviceId);
       }
 
       await supabase.from('push_tokens').upsert(

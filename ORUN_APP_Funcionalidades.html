@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrunApp - Funcionalidades do Projeto</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #05050A;
+            --panel-bg: #0A0A14;
+            --neon-cyan: #00f0ff;
+            --neon-purple: #b000ff;
+            --text-main: #FFFFFF;
+            --text-muted: #94a3b8;
+            --accent-gradient: linear-gradient(135deg, #00f0ff 0%, #b000ff 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--panel-bg);
+            border: 1px solid rgba(0, 240, 255, 0.1);
+            border-radius: 24px;
+            padding: 60px;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 30px;
+        }
+
+        .logo-text {
+            font-family: 'Outfit', sans-serif;
+            font-size: 3rem;
+            font-weight: 800;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            margin-bottom: 20px;
+            color: var(--neon-cyan);
+        }
+
+        h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.5rem;
+            margin: 30px 0 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-main);
+        }
+
+        h2::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 24px;
+            background: var(--accent-gradient);
+            border-radius: 2px;
+        }
+
+        p {
+            margin-bottom: 15px;
+            color: var(--text-muted);
+        }
+
+        ul {
+            list-style: none;
+            margin-bottom: 20px;
+        }
+
+        li {
+            margin-bottom: 10px;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--neon-cyan);
+            font-weight: bold;
+        }
+
+        .section-card {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 20px;
+        }
+
+        @media print {
+            body {
+                background: #fff !important;
+                color: #000 !important;
+                padding: 0;
+            }
+            .container {
+                box-shadow: none;
+                border: none;
+                width: 100%;
+                max-width: 100%;
+                padding: 20px;
+                background: #fff !important;
+                color: #000 !important;
+            }
+            .logo-text, h1, h2 {
+                -webkit-text-fill-color: initial !important;
+                background: none !important;
+                color: #000 !important;
+            }
+            .section-card {
+                border: 1px solid #ddd !important;
+                background: #fff !important;
+            }
+            p, li {
+                color: #333 !important;
+            }
+            li::before {
+                color: #000 !important;
+            }
+            .no-print {
+                display: none;
+            }
+        }
+
+        .btn-print {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: var(--accent-gradient);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 10px 20px rgba(0, 240, 255, 0.3);
+            font-family: 'Outfit', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: transform 0.2s;
+        }
+
+        .btn-print:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <button class="btn-print no-print" onclick="window.print()">Imprimir para PDF</button>
+
+    <div class="container">
+        <header>
+            <div class="logo-text">OrunApp</div>
+            <p>Ecossistema Digital para Gestão de Terreiros</p>
+        </header>
+
+        <h1>Manual de Funcionalidades</h1>
+        <p>Este documento descreve as capacidades técnicas e operacionais da plataforma OrunApp, projetada para modernizar a administração espiritual e financeira de casas de Umbanda, Kimbanda e Nação.</p>
+
+        <div class="section-card">
+            <h2>01. Gestão Administrativa e Multicasas</h2>
+            <ul>
+                <li><strong>Ambiente Multicasas:</strong> Centralização de diversos terreiros sob um mesmo painel mestre.</li>
+                <li><strong>Níveis de Acesso:</strong> Controle granular de permissões (Master, Admin, Financeiro, Secretaria, Membro).</li>
+                <li><strong>Customização Visual:</strong> Interface premium com temas dinâmicos e design focado na experiência do usuário.</li>
+            </ul>
+        </div>
+
+        <div class="section-card">
+            <h2>02. Cadastro e CRM Espiritual</h2>
+            <ul>
+                <li><strong>Ficha Detalhada:</strong> Armazenamento de dados pessoais, profissionais e rituais.</li>
+                <li><strong>Módulos de Tradição:</strong> Campos específicos para Umbanda, Quimbanda e Nação (assentamentos, obrigações, guias).</li>
+                <li><strong>Ciclo de Vida do Membro:</strong> Gestão de entrada, suspensão e atividade de membros da corrente.</li>
+            </ul>
+        </div>
+
+        <div class="section-card">
+            <h2>03. Módulo Financeiro Estruturado</h2>
+            <ul>
+                <li><strong>Fluxo de Caixa:</strong> Controle rigoroso de entradas e saídas com classificação por categorias.</li>
+                <li><strong>Cobranças Automáticas:</strong> Geração de mensalidades e taxas de eventos com acompanhamento de pagamentos.</li>
+                <li><strong>Integração Bancária:</strong> Cadastro de contas e chaves PIX para recebimentos facilitados.</li>
+            </ul>
+        </div>
+
+        <div class="section-card">
+            <h2>04. Logística e Inventário</h2>
+            <ul>
+                <li><strong>Estoque Inteligente:</strong> Monitoramento de insumos rituais com alertas de nível crítico.</li>
+                <li><strong>Automação de Compras:</strong> Geração de listas de suprimentos baseada no consumo e estoque atual.</li>
+            </ul>
+        </div>
+
+        <div class="section-card">
+            <h2>05. Comunicação e Engajamento</h2>
+            <ul>
+                <li><strong>Sistema de Broadcast:</strong> Envio de avisos locais ou globais para toda a rede de terreiros.</li>
+                <li><strong>Notificações em Tempo Real:</strong> Alertas via Push (Firebase) para dispositivos móveis e desktop.</li>
+                <li><strong>Automação de Datas:</strong> Monitoramento de aniversários com envio de mensagens automáticas via WhatsApp.</li>
+            </ul>
+        </div>
+
+        <div class="section-card">
+            <h2>06. Hub de Conhecimento</h2>
+            <ul>
+                <li><strong>Multi-Busca de Pontos:</strong> Integração com bases locais e YouTube para execução de pontos rituais.</li>
+                <li><strong>Biblioteca de Ervas:</strong> Catálogo técnico de ervas (Quentes/Mornas/Frias) com regências e formas de preparo.</li>
+                <li><strong>IA Assistente:</strong> Interface para consulta e expansão de conhecimento ancestral.</li>
+            </ul>
+        </div>
+
+        <div class="section-card">
+            <h2>07. Hub de Inteligência Artificial Avançada</h2>
+            <ul>
+                <li><strong>Consultas Teológicas Seguras:</strong> Dúvidas teológicas, regência de ervas e rituais respondidos com precisão e respeito à tradição.</li>
+                <li><strong>Geração de Insights Financeiros:</strong> Relatórios automatizados e insights gerados por IA para análise do fluxo de caixa e inadimplência.</li>
+                <li><strong>Sugestões de Escalas de Trabalho:</strong> Inteligência artificial sugerindo as melhores distribuições de tarefas para giras e obrigações.</li>
+            </ul>
+        </div>
+
+        <div class="footer">
+            <p>© 2024 OrunApp - Tecnologia a serviço da fé.</p>
+            <p>Gerado automaticamente pelo sistema de suporte técnico.</p>
+        </div>
+    </div>
+</body>
+</html>
