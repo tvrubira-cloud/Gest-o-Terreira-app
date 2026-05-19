@@ -8,6 +8,7 @@ import Settings from './pages/Settings';
 import Events from './pages/Events';
 import Members from './pages/Members';
 import RegisterTerreiro from './pages/RegisterTerreiro';
+import PublicRegister from './pages/PublicRegister'; // ← NOVO
 import Terreiros from './pages/Terreiros';
 import Financial from './pages/Financial';
 import SpiritualHub from './pages/SpiritualHub';
@@ -92,8 +93,11 @@ function App() {
     <BrowserRouter>
       <NotificationGate>
         <Routes>
+          {/* Rotas públicas — sem autenticação */}
           <Route path="/login" element={<Login />} />
-          
+          <Route path="/cadastro" element={<PublicRegister />} /> {/* ← NOVO */}
+
+          {/* Rotas protegidas — dentro do Layout autenticado */}
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
