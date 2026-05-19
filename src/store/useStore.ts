@@ -48,6 +48,9 @@ export interface SpiritualData {
   segmentoUmbanda: boolean;
   segmentoKimbanda: boolean;
   segmentoNacao: boolean;
+  segmentoCandomble: boolean;
+  segmentoOutras: boolean;
+  outrasTradicoesTexto: string;
   cidadeEstadoOrigem: string;
   cep?: string;
   cidade?: string;

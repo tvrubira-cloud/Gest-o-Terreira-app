@@ -65,6 +65,9 @@ export default function Terreiros() {
         segmentoUmbanda: editingTerreiro.segmentoUmbanda ?? true,
         segmentoKimbanda: editingTerreiro.segmentoKimbanda ?? false,
         segmentoNacao: editingTerreiro.segmentoNacao ?? false,
+        segmentoCandomble: editingTerreiro.segmentoCandomble ?? false,
+        segmentoOutras: editingTerreiro.segmentoOutras ?? false,
+        outrasTradicoesTexto: editingTerreiro.outrasTradicoesTexto ?? '',
       });
     }
     
