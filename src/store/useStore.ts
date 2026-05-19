@@ -109,6 +109,9 @@ export const defaultSpiritualData: SpiritualData = {
   segmentoUmbanda: false,
   segmentoKimbanda: false,
   segmentoNacao: false,
+  segmentoCandomble: false,
+  segmentoOutras: false,
+  outrasTradicoesTexto: '',
   cidadeEstadoOrigem: '',
   cep: '',
   cidade: '',
@@ -242,6 +245,9 @@ export interface Terreiro {
   segmentoUmbanda: boolean;
   segmentoKimbanda: boolean;
   segmentoNacao: boolean;
+  segmentoCandomble: boolean;
+  segmentoOutras: boolean;
+  outrasTradicoesTexto?: string;
   evolutionApiUrl?: string;
   evolutionApiKey?: string;
   evolutionInstance?: string;
@@ -264,7 +270,7 @@ interface AppState {
 
   // Computed / Selectors
   getCurrentTerreiro: () => Terreiro | undefined;
-  getCurrentTerreiroSeguimento: () => { segmentoUmbanda: boolean; segmentoKimbanda: boolean; segmentoNacao: boolean };
+  getCurrentTerreiroSeguimento: () => { segmentoUmbanda: boolean; segmentoKimbanda: boolean; segmentoNacao: boolean; segmentoCandomble: boolean; segmentoOutras: boolean; outrasTradicoesTexto?: string };
   getFilteredUsers: () => User[];
   getFilteredEvents: () => Event[];
   getFilteredBroadcasts: () => Broadcast[];
@@ -311,7 +317,7 @@ interface AppState {
   deleteTerreiro: (id: string) => Promise<void>;
   toggleBlockTerreiro: (id: string, blocked: boolean) => Promise<void>;
   registerTerreiro: (
-    terreiroData: { name: string; endereco: string; cep?: string; cidade?: string; estado?: string; segmentoUmbanda?: boolean; segmentoKimbanda?: boolean; segmentoNacao?: boolean },
+    terreiroData: { name: string; endereco: string; cep?: string; cidade?: string; estado?: string; segmentoUmbanda?: boolean; segmentoKimbanda?: boolean; segmentoNacao?: boolean; segmentoCandomble?: boolean; segmentoOutras?: boolean; outrasTradicoesTexto?: string },
     adminData: Omit<User, 'id' | 'createdAt' | 'terreiroId' | 'role'>
   ) => Promise<boolean>;
   addUser: (userData: Omit<User, 'id' | 'createdAt' | 'terreiroId'>) => Promise<void>;
@@ -358,6 +364,9 @@ function dbToTerreiro(row: any): Terreiro {
     segmentoUmbanda: seg.umbanda ?? true,
     segmentoKimbanda: seg.kimbanda ?? false,
     segmentoNacao: seg.nacao ?? false,
+    segmentoCandomble: seg.candomble ?? false,
+    segmentoOutras: seg.outras ?? false,
+    outrasTradicoesTexto: seg.outrasTexto || '',
     evolutionApiUrl: row.evolution_api_url || '',
     evolutionApiKey: row.evolution_api_key || '',
     evolutionInstance: row.evolution_instance || '',
@@ -648,20 +657,25 @@ export const useStore = create<AppState>()((set, get) => ({
   getCurrentTerreiroSeguimento: () => {
     const { terreiros, users, currentTerreiroId } = get();
     const terreiro = terreiros.find(t => t.id === currentTerreiroId);
-    if (!terreiro) return { segmentoUmbanda: true, segmentoKimbanda: false, segmentoNacao: false };
+    if (!terreiro) return { segmentoUmbanda: true, segmentoKimbanda: false, segmentoNacao: false, segmentoCandomble: false, segmentoOutras: false, outrasTradicoesTexto: '' };
 
     // Lê o seguimento diretamente do terreiro (fonte oficial)
     // Fallback para admin user (terreiros antigos sem coluna seguimento)
     const hasTerreiroSeguimento =
       terreiro.segmentoUmbanda === true ||
       terreiro.segmentoKimbanda === true ||
-      terreiro.segmentoNacao === true;
+      terreiro.segmentoNacao === true ||
+      terreiro.segmentoCandomble === true ||
+      terreiro.segmentoOutras === true;
 
     if (hasTerreiroSeguimento) {
       return {
         segmentoUmbanda: terreiro.segmentoUmbanda,
         segmentoKimbanda: terreiro.segmentoKimbanda,
         segmentoNacao: terreiro.segmentoNacao,
+        segmentoCandomble: terreiro.segmentoCandomble,
+        segmentoOutras: terreiro.segmentoOutras,
+        outrasTradicoesTexto: terreiro.outrasTradicoesTexto,
       };
     }
 
@@ -672,10 +686,13 @@ export const useStore = create<AppState>()((set, get) => ({
         segmentoUmbanda: adminUser.spiritual.segmentoUmbanda ?? true,
         segmentoKimbanda: adminUser.spiritual.segmentoKimbanda ?? false,
         segmentoNacao: adminUser.spiritual.segmentoNacao ?? false,
+        segmentoCandomble: adminUser.spiritual.segmentoCandomble ?? false,
+        segmentoOutras: adminUser.spiritual.segmentoOutras ?? false,
+        outrasTradicoesTexto: adminUser.spiritual.outrasTradicoesTexto ?? '',
       };
     }
 
-    return { segmentoUmbanda: true, segmentoKimbanda: false, segmentoNacao: false };
+    return { segmentoUmbanda: true, segmentoKimbanda: false, segmentoNacao: false, segmentoCandomble: false, segmentoOutras: false, outrasTradicoesTexto: '' };
   },
 
   getFilteredUsers: () => {
@@ -868,6 +885,14 @@ export const useStore = create<AppState>()((set, get) => ({
     set({ isLoading: true });
     try {
       const { currentUser } = get();
+      const seguimento = {
+        umbanda: terreiroData.segmentoUmbanda ?? true,
+        kimbanda: terreiroData.segmentoKimbanda ?? false,
+        nacao: terreiroData.segmentoNacao ?? false,
+        candomble: terreiroData.segmentoCandomble ?? false,
+        outras: terreiroData.segmentoOutras ?? false,
+        outrasTexto: terreiroData.outrasTradicoesTexto ?? '',
+      };
       const { data, error } = await supabase
         .from('terreiros')
         .insert({
@@ -877,6 +902,7 @@ export const useStore = create<AppState>()((set, get) => ({
           admin_id: currentUser?.id || '',
           master_id: currentUser?.isMaster ? currentUser.id : null,
           pix_key: terreiroData.pixKey || null,
+          seguimento,
         })
         .select()
         .single();
@@ -906,13 +932,19 @@ export const useStore = create<AppState>()((set, get) => ({
       if (
         terreiroData.segmentoUmbanda !== undefined ||
         terreiroData.segmentoKimbanda !== undefined ||
-        terreiroData.segmentoNacao !== undefined
+        terreiroData.segmentoNacao !== undefined ||
+        terreiroData.segmentoCandomble !== undefined ||
+        terreiroData.segmentoOutras !== undefined ||
+        terreiroData.outrasTradicoesTexto !== undefined
       ) {
         const current = get().terreiros.find(t => t.id === id);
         updateData.seguimento = {
           umbanda: terreiroData.segmentoUmbanda ?? current?.segmentoUmbanda ?? true,
           kimbanda: terreiroData.segmentoKimbanda ?? current?.segmentoKimbanda ?? false,
           nacao: terreiroData.segmentoNacao ?? current?.segmentoNacao ?? false,
+          candomble: terreiroData.segmentoCandomble ?? current?.segmentoCandomble ?? false,
+          outras: terreiroData.segmentoOutras ?? current?.segmentoOutras ?? false,
+          outrasTexto: terreiroData.outrasTradicoesTexto ?? current?.outrasTradicoesTexto ?? '',
         };
       }
 
@@ -990,6 +1022,9 @@ export const useStore = create<AppState>()((set, get) => ({
         umbanda: terreiroData.segmentoUmbanda ?? true,
         kimbanda: terreiroData.segmentoKimbanda ?? false,
         nacao: terreiroData.segmentoNacao ?? false,
+        candomble: terreiroData.segmentoCandomble ?? false,
+        outras: terreiroData.segmentoOutras ?? false,
+        outrasTexto: terreiroData.outrasTradicoesTexto ?? '',
       };
 
       // Create terreiro
@@ -1033,6 +1068,9 @@ export const useStore = create<AppState>()((set, get) => ({
             segmentoUmbanda: seguimento.umbanda,
             segmentoKimbanda: seguimento.kimbanda,
             segmentoNacao: seguimento.nacao,
+            segmentoCandomble: seguimento.candomble,
+            segmentoOutras: seguimento.outras,
+            outrasTradicoesTexto: seguimento.outrasTexto,
             cep: adminData.cep || adminData.spiritual?.cep || '',
             cidade: adminData.cidade || adminData.spiritual?.cidade || '',
             estado: adminData.estado || adminData.spiritual?.estado || '',

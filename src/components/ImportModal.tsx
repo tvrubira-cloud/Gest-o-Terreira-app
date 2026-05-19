@@ -30,6 +30,8 @@ export default function ImportModal({ isOpen, onClose, headers, data, onComplete
     seguimento.segmentoUmbanda && 'Umbanda',
     seguimento.segmentoKimbanda && 'Quimbanda',
     seguimento.segmentoNacao && 'Nação de Orixás',
+    seguimento.segmentoCandomble && 'Candomblé',
+    seguimento.segmentoOutras && (seguimento.outrasTradicoesTexto || 'Outras Tradições'),
   ].filter(Boolean) as string[];
 
   useEffect(() => {

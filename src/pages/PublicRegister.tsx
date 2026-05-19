@@ -29,6 +29,9 @@ export default function PublicRegister() {
   const [segmentoUmbanda, setSegmentoUmbanda] = useState(true);
   const [segmentoKimbanda, setSegmentoKimbanda] = useState(false);
   const [segmentoNacao, setSegmentoNacao] = useState(false);
+  const [segmentoCandomble, setSegmentoCandomble] = useState(false);
+  const [segmentoOutras, setSegmentoOutras] = useState(false);
+  const [outrasTradicoesTexto, setOutrasTradicoesTexto] = useState('');
 
   const planoLabel: Record<string, string> = {
     trial: '21 dias grátis',
@@ -66,8 +69,13 @@ export default function PublicRegister() {
       return;
     }
 
-    if (!segmentoUmbanda && !segmentoKimbanda && !segmentoNacao) {
+    if (!segmentoUmbanda && !segmentoKimbanda && !segmentoNacao && !segmentoCandomble && !segmentoOutras) {
       setError('Selecione ao menos uma tradição praticada no terreiro.');
+      return;
+    }
+
+    if (segmentoOutras && !outrasTradicoesTexto.trim()) {
+      setError('Informe qual é a outra tradição praticada.');
       return;
     }
 
@@ -78,6 +86,9 @@ export default function PublicRegister() {
         segmentoUmbanda,
         segmentoKimbanda,
         segmentoNacao,
+        segmentoCandomble,
+        segmentoOutras,
+        outrasTradicoesTexto: outrasTradicoesTexto.trim(),
       },
       {
         cpf: cpf.trim().toLowerCase(), // login — CPF ou string livre
@@ -98,6 +109,9 @@ export default function PublicRegister() {
           segmentoUmbanda,
           segmentoKimbanda,
           segmentoNacao,
+          segmentoCandomble,
+          segmentoOutras,
+          outrasTradicoesTexto: outrasTradicoesTexto.trim(),
           tipoMedium: 'Sacerdote',
         },
       }
@@ -330,9 +344,11 @@ export default function PublicRegister() {
             <label style={labelStyle}>Tradição praticada *</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {([
-                { key: 'umbanda',  label: 'Umbanda',        cor: '#00C8C8', state: segmentoUmbanda,  set: setSegmentoUmbanda },
-                { key: 'kimbanda', label: 'Quimbanda',      cor: '#9D4EDD', state: segmentoKimbanda, set: setSegmentoKimbanda },
-                { key: 'nacao',    label: 'Nação de Orixás', cor: '#C9A84C', state: segmentoNacao,    set: setSegmentoNacao },
+                { key: 'umbanda',  label: 'Umbanda',        cor: '#00C8C8', rgb: '0,200,200', state: segmentoUmbanda,  set: setSegmentoUmbanda },
+                { key: 'kimbanda', label: 'Quimbanda',      cor: '#9D4EDD', rgb: '157,78,221', state: segmentoKimbanda, set: setSegmentoKimbanda },
+                { key: 'nacao',    label: 'Nação de Orixás', cor: '#C9A84C', rgb: '201,168,76', state: segmentoNacao,    set: setSegmentoNacao },
+                { key: 'candomble', label: 'Candomblé',      cor: '#FF6B6B', rgb: '255,107,107', state: segmentoCandomble, set: setSegmentoCandomble },
+                { key: 'outras',   label: 'Outras Tradições',cor: '#4EA8DE', rgb: '78,168,222', state: segmentoOutras,   set: setSegmentoOutras },
               ] as const).map((item) => (
                 <button
                   key={item.key}
@@ -341,7 +357,7 @@ export default function PublicRegister() {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12,
                     padding: '12px 16px', borderRadius: 10, cursor: 'pointer',
-                    background: item.state ? `rgba(${item.cor === '#00C8C8' ? '0,200,200' : item.cor === '#9D4EDD' ? '157,78,221' : '201,168,76'}, 0.1)` : 'rgba(255,255,255,0.03)',
+                    background: item.state ? `rgba(${item.rgb}, 0.1)` : 'rgba(255,255,255,0.03)',
                     border: `1.5px solid ${item.state ? item.cor : 'rgba(255,255,255,0.1)'}`,
                     color: item.state ? item.cor : '#6b7280',
                     fontWeight: item.state ? 700 : 400,
@@ -363,6 +379,18 @@ export default function PublicRegister() {
                   {item.label}
                 </button>
               ))}
+              
+              {segmentoOutras && (
+                <input
+                  type="text"
+                  placeholder="Qual a sua tradição?"
+                  value={outrasTradicoesTexto}
+                  onChange={(e) => { setOutrasTradicoesTexto(e.target.value); setError(''); }}
+                  onFocus={onFocus} onBlur={onBlur}
+                  style={{ ...inputStyle, marginTop: 4 }}
+                  required={segmentoOutras}
+                />
+              )}
             </div>
           </div>
 

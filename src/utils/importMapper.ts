@@ -309,6 +309,9 @@ export interface TerreiroSeguimento {
   segmentoUmbanda: boolean;
   segmentoKimbanda: boolean;
   segmentoNacao: boolean;
+  segmentoCandomble?: boolean;
+  segmentoOutras?: boolean;
+  outrasTradicoesTexto?: string;
 }
 
 // ─── Converte uma linha da planilha para o objeto de usuário ─────────────────
@@ -326,6 +329,9 @@ export function rowToUserData(
         segmentoUmbanda: terreiroSeguimento.segmentoUmbanda,
         segmentoKimbanda: terreiroSeguimento.segmentoKimbanda,
         segmentoNacao: terreiroSeguimento.segmentoNacao,
+        segmentoCandomble: terreiroSeguimento.segmentoCandomble ?? false,
+        segmentoOutras: terreiroSeguimento.segmentoOutras ?? false,
+        outrasTradicoesTexto: terreiroSeguimento.outrasTradicoesTexto ?? '',
       }),
     },
   };
