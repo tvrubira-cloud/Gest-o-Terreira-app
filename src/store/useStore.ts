@@ -1152,7 +1152,7 @@ export const useStore = create<AppState>()((set, get) => ({
     }
   },
 
-  migrateUserToTerreiro: async (cpf, terreiroId, keepInOldTerreiro, userData) => {
+  migrateUserToTerreiro: async (cpf, terreiroId, _keepInOldTerreiro, userData: any) => {
     set({ isLoading: true });
     try {
       const { data: existingUsers, error: searchError } = await supabase
