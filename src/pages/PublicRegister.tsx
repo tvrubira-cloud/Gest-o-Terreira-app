@@ -92,7 +92,6 @@ export default function PublicRegister() {
         whatsapp: '',
         profissao: '',
         nomePais: '',
-        role: 'ADMIN',
         spiritual: {
           ...defaultSpiritualData,
           situacaoCadastro: 'ativo',
