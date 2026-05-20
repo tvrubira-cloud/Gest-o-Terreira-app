@@ -188,6 +188,7 @@ export default function Members() {
   const handleOpenNew = () => {
     setEditingUser({
       role: 'USER',
+      isPanelAdmin: false,
       nomeCompleto: '',
       cpf: '',
       nomeDeSanto: '',
