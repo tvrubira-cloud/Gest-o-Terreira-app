@@ -114,7 +114,7 @@ export default function Layout() {
           </div>
 
           {/* ── Terreiro Switcher ── */}
-          {isAdmin && userTerreiros.length > 0 && (
+          {userTerreiros.length > 1 && (
             <div style={{ position: 'relative', margin: '0.5rem 0.8rem' }}>
               <button
                 onClick={() => setShowTerreiroDropdown(!showTerreiroDropdown)}
