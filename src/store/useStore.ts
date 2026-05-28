@@ -1162,6 +1162,8 @@ login: async (cpf, password) => {
         outrasTexto: terreiroData.outrasTradicoesTexto ?? '',
       };
 
+      const trialExpiresAt = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString();
+
       // Create terreiro
       const { data: newTerreiro, error: tError } = await supabase
         .from('terreiros')
@@ -1174,6 +1176,7 @@ login: async (cpf, password) => {
           seguimento,
           plan: 'trial',
           plan_status: 'trialing',
+          plan_expires_at: trialExpiresAt,
         })
         .select()
         .single();

@@ -168,6 +168,62 @@ export default function Dashboard() {
         )}
       </motion.div>
 
+      {/* ── Trial countdown ── */}
+      {currentTerreiro?.plan === 'trial' && currentTerreiro.planExpiresAt && (
+        <motion.div
+          variants={itemVariants}
+          className="glass-panel"
+          style={{
+            padding: '1.2rem 1.5rem',
+            borderRadius: 'var(--panel-radius)',
+            border: '1px solid rgba(201,168,76,0.3)',
+            background: 'rgba(201,168,76,0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '1rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <Sparkles size={24} color="#C9A84C" />
+            <div>
+              <strong style={{ color: '#C9A84C', fontSize: '0.95rem' }}>
+                Período de avaliação gratuita
+              </strong>
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', marginTop: 2 }}>
+                Aproveite 21 dias com todas as funcionalidades liberadas.
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#C9A84C', lineHeight: 1 }}>
+                {Math.max(0, Math.ceil((new Date(currentTerreiro.planExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                dias restantes
+              </div>
+            </div>
+            <div style={{
+              width: 120,
+              height: 4,
+              background: 'rgba(255,255,255,0.08)',
+              borderRadius: 2,
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${Math.max(0, Math.min(100, Math.ceil((new Date(currentTerreiro.planExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) / 21 * 100))}%`,
+                background: 'linear-gradient(90deg, #C9A84C, #0A4A4D)',
+                borderRadius: 2,
+                transition: 'width 0.5s ease',
+              }} />
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {isStaff && (
         <motion.div variants={itemVariants} className="glass-panel" style={{ padding: '1.5rem', borderRadius: 'var(--panel-radius)', border: `1px solid ${birthdaysThisMonth.some(b => b.isToday) ? '#ff80bf' : 'rgba(255,180,100,0.3)'}`, background: birthdaysThisMonth.some(b => b.isToday) ? 'rgba(255,100,180,0.06)' : 'rgba(255,180,50,0.04)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
