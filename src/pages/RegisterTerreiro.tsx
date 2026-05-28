@@ -24,6 +24,8 @@ export default function RegisterTerreiro() {
   
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
+  const [showPalavraChave, setShowPalavraChave] = useState(false);
+  const [palavraChave, setPalavraChave] = useState('');
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [nomeDeSanto, setNomeDeSanto] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -61,6 +63,11 @@ export default function RegisterTerreiro() {
       return;
     }
 
+    if (!palavraChave.trim() || palavraChave.trim().length < 3) {
+      setError('Informe uma palavra-chave com ao menos 3 caracteres. Ela é usada para recuperar sua senha.');
+      return;
+    }
+
     if (!segmentoUmbanda && !segmentoKimbanda && !segmentoNacao) {
       setError('Selecione ao menos um seguimento para a casa.');
       setStep(1);
@@ -81,6 +88,7 @@ export default function RegisterTerreiro() {
       {
         cpf,
         password,
+        palavraChave: palavraChave.trim().toLowerCase(),
         nomeCompleto,
         nomeDeSanto,
         dataNascimento: '',
@@ -407,6 +415,41 @@ export default function RegisterTerreiro() {
                     style={{ ...inputStyle, letterSpacing: '3px' }} required
                   />
                 </div>
+              </div>
+
+              {/* Palavra-chave para recuperação de senha */}
+              <div style={{
+                background: 'rgba(201,168,76,0.06)',
+                border: '1px solid rgba(201,168,76,0.2)',
+                borderRadius: 12,
+                padding: '16px 18px',
+              }}>
+                <label style={{ ...labelStyle, color: '#C9A84C' }}>
+                  🔑 Palavra-chave (recuperação de senha) *
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showPalavraChave ? 'text' : 'password'}
+                    placeholder="Ex: nome da sua cidade natal, animal favorito..."
+                    value={palavraChave}
+                    onChange={e => { setPalavraChave(e.target.value); setError(''); }}
+                    onFocus={handleFocus} onBlur={handleBlur}
+                    style={{ ...inputStyle, paddingRight: 44, letterSpacing: '3px' }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPalavraChave((v) => !v)}
+                    style={{
+                      position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'rgba(255,255,255,0.35)', fontSize: 14,
+                    }}
+                  >{showPalavraChave ? '🙈' : '👁'}</button>
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: 6, display: 'block', lineHeight: 1.5 }}>
+                  ⚠️ Guarde esta palavra! Ela é a única forma de recuperar sua senha caso esqueça.
+                </span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

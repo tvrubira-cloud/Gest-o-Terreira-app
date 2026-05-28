@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore';
 import bgImage from '../assets/bg.png';
 import logo from '../assets/nova logo.png';
 import '../App.css';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const [step, setStep] = useState<'CPF' | 'PASSWORD' | 'SET_PASSWORD' | 'RECOVER_PASSWORD'>('CPF');
@@ -11,6 +12,8 @@ export default function Login() {
   const [rememberCpf, setRememberCpf] = useState(() => localStorage.getItem('orun_remember_cpf') === 'true');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [palavraChave, setPalavraChave] = useState('');
   const [userName, setUserName] = useState('');
   const [error, setError] = useState('');
@@ -176,15 +179,20 @@ export default function Login() {
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <label style={{ color: 'var(--neon-cyan)', fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase' }}>Sua Senha</label>
-              <input 
-                type="password" 
-                placeholder="••••••••" 
-                value={password} 
-                onChange={e => { setPassword(e.target.value); setError(''); }} 
-                className="glass-panel"
-                style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,240,255,0.2)', padding: '1rem', color: '#fff', borderRadius: 12 }}
-                autoFocus
-              />
+              <div style={{ position: 'relative' }}>
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  placeholder="••••••••" 
+                  value={password} 
+                  onChange={e => { setPassword(e.target.value); setError(''); }} 
+                  className="glass-panel"
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,240,255,0.2)', padding: '1rem', color: '#fff', borderRadius: 12, paddingRight: '2.5rem' }}
+                  autoFocus
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '0.8rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button type="button" onClick={() => { setStep('RECOVER_PASSWORD'); setError(''); setPassword(''); setConfirmPassword(''); setPalavraChave(''); }} style={{ background: 'none', border: 'none', color: 'var(--neon-purple)', cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline' }}>Esqueci minha senha</button>
@@ -215,23 +223,33 @@ export default function Login() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <label style={{ color: 'var(--neon-cyan)', fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase' }}>Nova Senha</label>
-              <input 
-                type="password" 
-                value={password} 
-                onChange={e => { setPassword(e.target.value); setError(''); }} 
-                className="glass-panel"
-                style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,240,255,0.2)', padding: '1rem', color: '#fff', borderRadius: 12 }}
-              />
+              <div style={{ position: 'relative' }}>
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  value={password} 
+                  onChange={e => { setPassword(e.target.value); setError(''); }} 
+                  className="glass-panel"
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,240,255,0.2)', padding: '1rem', color: '#fff', borderRadius: 12, paddingRight: '2.5rem' }}
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '0.8rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <label style={{ color: 'var(--neon-cyan)', fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase' }}>Confirme Nova Senha</label>
-              <input 
-                type="password" 
-                value={confirmPassword} 
-                onChange={e => { setConfirmPassword(e.target.value); setError(''); }} 
-                className="glass-panel"
-                style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,240,255,0.2)', padding: '1rem', color: '#fff', borderRadius: 12 }}
-              />
+              <div style={{ position: 'relative' }}>
+                <input 
+                  type={showConfirmPassword ? "text" : "password"} 
+                  value={confirmPassword} 
+                  onChange={e => { setConfirmPassword(e.target.value); setError(''); }} 
+                  className="glass-panel"
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,240,255,0.2)', padding: '1rem', color: '#fff', borderRadius: 12, paddingRight: '2.5rem' }}
+                />
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: '0.8rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
             {error && <span style={{ color: '#ff4c4c', fontSize: '0.85rem' }}>{error}</span>}
             <div style={{ display: 'flex', gap: '1rem' }}>
@@ -247,24 +265,34 @@ export default function Login() {
           <form onSubmit={handleSetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <label style={{ color: 'var(--neon-cyan)', fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase' }}>Crie sua Senha</label>
-              <input 
-                type="password" 
-                value={password} 
-                onChange={e => { setPassword(e.target.value); setError(''); }} 
-                className="glass-panel"
-                style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,240,255,0.2)', padding: '1rem', color: '#fff', borderRadius: 12 }}
-                autoFocus
-              />
+              <div style={{ position: 'relative' }}>
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  value={password} 
+                  onChange={e => { setPassword(e.target.value); setError(''); }} 
+                  className="glass-panel"
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,240,255,0.2)', padding: '1rem', color: '#fff', borderRadius: 12, paddingRight: '2.5rem' }}
+                  autoFocus
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '0.8rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <label style={{ color: 'var(--neon-cyan)', fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase' }}>Confirme a Senha</label>
-              <input 
-                type="password" 
-                value={confirmPassword} 
-                onChange={e => { setConfirmPassword(e.target.value); setError(''); }} 
-                className="glass-panel"
-                style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,240,255,0.2)', padding: '1rem', color: '#fff', borderRadius: 12 }}
-              />
+              <div style={{ position: 'relative' }}>
+                <input 
+                  type={showConfirmPassword ? "text" : "password"} 
+                  value={confirmPassword} 
+                  onChange={e => { setConfirmPassword(e.target.value); setError(''); }} 
+                  className="glass-panel"
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,240,255,0.2)', padding: '1rem', color: '#fff', borderRadius: 12, paddingRight: '2.5rem' }}
+                />
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: '0.8rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <label style={{ color: 'var(--neon-purple)', fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase' }}>Palavra-Chave de Recuperação</label>
@@ -284,6 +312,17 @@ export default function Login() {
             </button>
           </form>
         )}
+
+        {/* Links adicionais (Landing Page e Suporte) */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
+          <a href="/landing/index.html" style={{ color: 'var(--neon-cyan)', fontSize: '0.9rem', textDecoration: 'none', fontWeight: 600 }}>
+            Conhecer o OrunApp
+          </a>
+          <a href="https://wa.me/554898237206" target="_blank" rel="noopener noreferrer" style={{ color: '#25d366', fontSize: '0.9rem', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+            Suporte
+          </a>
+        </div>
 
 
       </div>

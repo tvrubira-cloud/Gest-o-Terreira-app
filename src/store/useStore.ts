@@ -1194,6 +1194,7 @@ login: async (cpf, password) => {
           role: 'ADMIN',
           cpf: adminData.cpf,
           password: adminData.password || null,
+          palavra_chave: adminData.palavraChave?.trim().toLowerCase() || null,
           nome_completo: adminData.nomeCompleto,
           nome_de_santo: adminData.nomeDeSanto || '',
           data_nascimento: adminData.dataNascimento || '',

@@ -35,7 +35,9 @@ export default function PublicRegister() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
+  const [palavraChave, setPalavraChave] = useState('');
   const [showSenha, setShowSenha] = useState(false);
+  const [showPalavraChave, setShowPalavraChave] = useState(false);
 
   // Estados para migração
   const [selectedTerreiroId, setSelectedTerreiroId] = useState<string>('');
@@ -264,6 +266,11 @@ export default function PublicRegister() {
       return;
     }
 
+    if (!palavraChave.trim() || palavraChave.trim().length < 3) {
+      setError('Informe uma palavra-chave com ao menos 3 caracteres. Ela é usada para recuperar sua senha.');
+      return;
+    }
+
     if (!segmentoUmbanda && !segmentoKimbanda && !segmentoNacao && !segmentoCandomble && !segmentoOutras) {
       setError('Selecione ao menos uma tradição praticada no terreiro.');
       return;
@@ -294,13 +301,14 @@ export default function PublicRegister() {
       {
         cpf: cpfDigits,
         password: senha,
+        palavraChave: palavraChave.trim().toLowerCase(),
         nomeCompleto: nomeCompleto.trim(),
         nomeDeSanto: '',
         dataNascimento: '',
         rg: '',
         endereco: '',
         telefone: '',
-        email: email.trim().toLowerCase(), // e-mail separado, para contato/recuperação
+        email: email.trim().toLowerCase(),
         whatsapp: '',
         profissao: '',
         nomePais: '',
@@ -708,6 +716,41 @@ export default function PublicRegister() {
                 required
               />
             </div>
+          </div>
+
+          {/* Palavra-chave para recuperação de senha */}
+          <div style={{
+            background: 'rgba(201,168,76,0.06)',
+            border: '1px solid rgba(201,168,76,0.2)',
+            borderRadius: 12,
+            padding: '16px 18px',
+          }}>
+            <label style={{ ...labelStyle, color: '#C9A84C' }}>
+              🔑 Palavra-chave (recuperação de senha) *
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPalavraChave ? 'text' : 'password'}
+                placeholder="Ex: nome da sua cidade natal, animal favorito..."
+                value={palavraChave}
+                onChange={(e) => { setPalavraChave(e.target.value); setError(''); }}
+                onFocus={onFocus} onBlur={onBlur}
+                style={{ ...inputStyle, paddingRight: 44 }}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPalavraChave((v) => !v)}
+                style={{
+                  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'rgba(255,255,255,0.35)', fontSize: 14,
+                }}
+              >{showPalavraChave ? '🙈' : '👁'}</button>
+            </div>
+            <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: 6, display: 'block', lineHeight: 1.5 }}>
+              ⚠️ Guarde esta palavra! Ela é a única forma de recuperar sua senha caso esqueça.
+            </span>
           </div>
 
           {/* Tradição */}
