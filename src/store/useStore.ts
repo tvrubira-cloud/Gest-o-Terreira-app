@@ -3,6 +3,52 @@ import { supabase, supabaseRead } from '../lib/supabase';
 
 export type Role = 'ADMIN' | 'FINANCEIRO' | 'SECRETARIA' | 'USER';
 
+// ─── Planos ────────────────────────────────────────────────────
+export type PlanType = 'trial' | 'ile' | 'axe' | 'orun';
+export type PlanStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'expired';
+
+export const PLAN_LABELS: Record<PlanType, string> = {
+  trial: '21 dias grátis',
+  ile: 'Plano Ilê',
+  axe: 'Plano Axé',
+  orun: 'Plano Orun',
+};
+
+export const PLAN_PRICES: Record<PlanType, number> = {
+  trial: 0,
+  ile: 57,
+  axe: 79,
+  orun: 97,
+};
+
+export type Feature =
+  | 'members'
+  | 'crm_spiritual'
+  | 'events'
+  | 'broadcast_push'
+  | 'knowledge_hub'
+  | 'financial'
+  | 'cash_flow'
+  | 'pix_integration'
+  | 'charges'
+  | 'whatsapp'
+  | 'inventory'
+  | 'shopping_list'
+  | 'multi_casas'
+  | 'access_control'
+  | 'central_panel';
+
+export const PLAN_FEATURES: Record<PlanType, Feature[]> = {
+  trial: ['members', 'crm_spiritual', 'events', 'broadcast_push', 'knowledge_hub'],
+  ile: ['members', 'crm_spiritual', 'events', 'broadcast_push', 'knowledge_hub'],
+  axe: ['members', 'crm_spiritual', 'events', 'broadcast_push', 'knowledge_hub', 'financial', 'cash_flow', 'pix_integration', 'charges', 'whatsapp'],
+  orun: ['members', 'crm_spiritual', 'events', 'broadcast_push', 'knowledge_hub', 'financial', 'cash_flow', 'pix_integration', 'charges', 'whatsapp', 'inventory', 'shopping_list', 'multi_casas', 'access_control', 'central_panel'],
+};
+
+export function canAccess(feature: Feature, plan: PlanType): boolean {
+  return PLAN_FEATURES[plan]?.includes(feature) ?? false;
+}
+
 // ─── Cash Flow ─────────────────────────────────────────────────
 export interface CashFlowEntry {
   id: string;
@@ -244,6 +290,9 @@ export interface Terreiro {
   pixKey?: string;
   isBlocked?: boolean;
   createdAt: string;
+  plan: PlanType;
+  planStatus: PlanStatus;
+  planExpiresAt?: string;
   // Seguimento da casa (tradição(ões) praticada(s))
   segmentoUmbanda: boolean;
   segmentoKimbanda: boolean;
@@ -275,6 +324,8 @@ bankAccounts: BankAccount[];
   // Computed / Selectors
   getCurrentTerreiro: () => Terreiro | undefined;
   getCurrentTerreiroSeguimento: () => { segmentoUmbanda: boolean; segmentoKimbanda: boolean; segmentoNacao: boolean; segmentoCandomble: boolean; segmentoOutras: boolean; outrasTradicoesTexto?: string };
+  getCurrentTerreiroPlan: () => PlanType;
+  canAccessFeature: (feature: Feature) => boolean;
   getFilteredUsers: () => User[];
   getFilteredEvents: () => Event[];
   getFilteredBroadcasts: () => Broadcast[];
@@ -376,6 +427,9 @@ function dbToTerreiro(row: any): Terreiro {
     pixKey: row.pix_key,
     isBlocked: row.is_blocked || false,
     createdAt: row.created_at,
+    plan: (['trial', 'ile', 'axe', 'orun'].includes(row.plan) ? row.plan : 'trial') as PlanType,
+    planStatus: (['trialing', 'active', 'past_due', 'canceled', 'expired'].includes(row.plan_status) ? row.plan_status : 'trialing') as PlanStatus,
+    planExpiresAt: row.plan_expires_at || undefined,
     segmentoUmbanda: seg.umbanda ?? true,
     segmentoKimbanda: seg.kimbanda ?? false,
     segmentoNacao: seg.nacao ?? false,
@@ -684,6 +738,19 @@ export const useStore = create<AppState>()((set, get) => ({
   getCurrentTerreiro: () => {
     const { terreiros, currentTerreiroId } = get();
     return terreiros.find(t => t.id === currentTerreiroId);
+  },
+
+  getCurrentTerreiroPlan: () => {
+    const { terreiros, currentTerreiroId } = get();
+    const terreiro = terreiros.find(t => t.id === currentTerreiroId);
+    return terreiro?.plan ?? 'trial';
+  },
+
+  canAccessFeature: (feature: Feature) => {
+    const { terreiros, currentTerreiroId, currentUser } = get();
+    if (currentUser?.isMaster) return true;
+    const terreiro = terreiros.find(t => t.id === currentTerreiroId);
+    return canAccess(feature, terreiro?.plan ?? 'trial');
   },
 
   getCurrentTerreiroSeguimento: () => {
@@ -1105,6 +1172,8 @@ login: async (cpf, password) => {
           admin_id: '',
           master_id: currentUser?.isMaster ? currentUser.id : null,
           seguimento,
+          plan: 'trial',
+          plan_status: 'trialing',
         })
         .select()
         .single();

@@ -52,9 +52,9 @@ export default function PublicRegister() {
 
   const planoLabel: Record<string, string> = {
     trial: '21 dias grátis',
-    basico: 'Plano Básico',
-    profissional: 'Plano Profissional',
-    rede: 'Plano Rede de Ilês',
+    ile: 'Plano Ilê',
+    axe: 'Plano Axé',
+    orun: 'Plano Orun',
   };
 
   const cpfDigits = cpf.replace(/\D/g, '');

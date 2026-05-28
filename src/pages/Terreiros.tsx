@@ -62,6 +62,8 @@ export default function Terreiros() {
         endereco: editingTerreiro.endereco || '',
         logoUrl: editingTerreiro.logoUrl || '',
         adminId: currentUser.id,
+        plan: 'trial',
+        planStatus: 'trialing',
         segmentoUmbanda: editingTerreiro.segmentoUmbanda ?? true,
         segmentoKimbanda: editingTerreiro.segmentoKimbanda ?? false,
         segmentoNacao: editingTerreiro.segmentoNacao ?? false,

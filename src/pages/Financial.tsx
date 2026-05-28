@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useStore } from '../store/useStore';
+import { useStore, canAccess } from '../store/useStore';
 import type { Charge, ChargeType, BankAccount, CashFlowEntry, InventoryItem, ShoppingListItem } from '../store/useStore';
 import { DollarSign, Plus, ArrowLeft, CheckCircle, Clock, AlertCircle, Landmark, Trash2, Copy, Calendar, History, TrendingUp, TrendingDown, ChevronDown, Filter, MessageCircle, Package, ShoppingCart, AlertTriangle, Bell, ArrowUpCircle, ArrowDownCircle, Pencil, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,6 +26,8 @@ export default function Financial() {
   const isFinanceiro = role === 'FINANCEIRO';
   const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
   const canManageFinancial = isAdmin || isFinanceiro || isMaster;
+  const hasCashFlow = canAccess('cash_flow', currentTerreiro?.plan ?? 'trial');
+  const hasInventory = canAccess('inventory', currentTerreiro?.plan ?? 'trial');
 
   const [activeTab, setActiveTab] = useState<'HOUSE' | 'SYSTEM' | 'BANKS' | 'HISTORY' | 'CASHFLOW' | 'INVENTORY'>('HOUSE');
   const [view, setView] = useState<'LIST' | 'FORM' | 'FORM_BANK'>('LIST');
@@ -209,16 +211,20 @@ export default function Financial() {
                 style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'HISTORY' ? '#00ff88' : 'transparent', color: activeTab === 'HISTORY' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <History size={14} /> Histórico
               </button>
-              <button
-                onClick={() => setActiveTab('CASHFLOW')}
-                style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'CASHFLOW' ? 'var(--neon-cyan)' : 'transparent', color: activeTab === 'CASHFLOW' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <TrendingUp size={14} /> Fluxo de Caixa
-              </button>
-              <button
-                onClick={() => setActiveTab('INVENTORY')}
-                style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'INVENTORY' ? 'var(--accent-gold, #e2b714)' : 'transparent', color: activeTab === 'INVENTORY' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <Package size={14} /> Estoque
-              </button>
+              {hasCashFlow && (
+                <button
+                  onClick={() => setActiveTab('CASHFLOW')}
+                  style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'CASHFLOW' ? 'var(--neon-cyan)' : 'transparent', color: activeTab === 'CASHFLOW' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <TrendingUp size={14} /> Fluxo de Caixa
+                </button>
+              )}
+              {hasInventory && (
+                <button
+                  onClick={() => setActiveTab('INVENTORY')}
+                  style={{ padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', background: activeTab === 'INVENTORY' ? 'var(--accent-gold, #e2b714)' : 'transparent', color: activeTab === 'INVENTORY' ? '#000' : 'var(--text-main)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Package size={14} /> Estoque
+                </button>
+              )}
             </div>
           )}
 
@@ -238,7 +244,7 @@ export default function Financial() {
               <Plus size={18} /> {activeTab === 'BANKS' ? 'Nova Conta' : (activeTab === 'SYSTEM' ? 'Cobrar Terreiros' : 'Nova Cobrança')}
             </button>
           )}
-          {canManageFinancial && activeTab === 'CASHFLOW' && (
+          {canManageFinancial && activeTab === 'CASHFLOW' && hasCashFlow && (
             <button
               onClick={() => { setShowCashFlowForm(v => !v); setEditingCashFlow(null); setCashFlowForm({ type: 'recebimento', description: '', amount: 0, date: '', realized: false, notes: '' }); }}
               className="glass-panel glow-fx"
@@ -247,7 +253,7 @@ export default function Financial() {
               <Plus size={18} /> Nova Entrada
             </button>
           )}
-          {canManageFinancial && activeTab === 'INVENTORY' && inventorySubTab === 'ITEMS' && (
+          {canManageFinancial && activeTab === 'INVENTORY' && inventorySubTab === 'ITEMS' && hasInventory && (
             <button
               onClick={() => { setShowInventoryForm(v => !v); setEditingInventory(null); setInventoryForm({ name: '', category: '', unit: 'un', currentStock: 0, minimumStock: 0, unitPrice: 0, notes: '' }); }}
               className="glass-panel glow-fx"
@@ -256,7 +262,7 @@ export default function Financial() {
               <Plus size={18} /> Novo Item
             </button>
           )}
-          {canManageFinancial && activeTab === 'INVENTORY' && inventorySubTab === 'SHOPPING' && (
+          {canManageFinancial && activeTab === 'INVENTORY' && inventorySubTab === 'SHOPPING' && hasInventory && (
             <button
               onClick={() => setShowShoppingForm(v => !v)}
               className="glass-panel glow-fx"

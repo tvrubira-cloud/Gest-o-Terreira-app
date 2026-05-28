@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom';
-import { useStore } from '../store/useStore';
-import { LayoutDashboard, Users, Calendar, Settings, LogOut, Hexagon, Search, Bell, ChevronDown, Building2, DollarSign, Lock, Sparkles, Sun, Moon, Menu, X, Megaphone } from 'lucide-react';
+import { useStore, canAccess, PLAN_LABELS } from '../store/useStore';
+import { LayoutDashboard, Users, Calendar, Settings, LogOut, Hexagon, Search, Bell, ChevronDown, Building2, DollarSign, Lock, Sparkles, Sun, Moon, Menu, X, Megaphone, Crown } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import bgImage from '../assets/bg.png';
@@ -24,8 +24,10 @@ export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Hooks must be called at the top, before any conditional returns
+  const getCurrentTerreiroPlan = useStore(state => state.getCurrentTerreiroPlan);
   const broadcasts = useStore(state => state.broadcasts);
   const currentTerreiro = terreiros.find(t => t.id === currentTerreiroId);
+  const currentPlan = getCurrentTerreiroPlan();
 
   const isMaster = !!currentUser?.isMaster || !!currentUser?.isPanelAdmin;
 
@@ -111,6 +113,26 @@ export default function Layout() {
             <h1 className="logo-text text-gradient" style={{ fontSize: '1.1rem', lineHeight: '1.2', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
               <span>{currentTerreiro?.name || 'Terreiro'}</span>
             </h1>
+            {currentPlan && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: '0.65rem',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                padding: '2px 8px',
+                borderRadius: 20,
+                background: currentPlan === 'orun' ? 'rgba(201,168,76,0.15)' : currentPlan === 'axe' ? 'rgba(0,200,200,0.12)' : 'rgba(255,255,255,0.06)',
+                border: `0.5px solid ${currentPlan === 'orun' ? 'rgba(201,168,76,0.3)' : currentPlan === 'axe' ? 'rgba(0,200,200,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                color: currentPlan === 'orun' ? '#C9A84C' : currentPlan === 'axe' ? '#00C8C8' : 'rgba(255,255,255,0.4)',
+                marginTop: 4,
+              }}>
+                <Crown size={10} />
+                {PLAN_LABELS[currentPlan] || 'Trial'}
+              </div>
+            )}
           </div>
 
           {/* ── Terreiro Switcher ── */}
@@ -226,7 +248,17 @@ export default function Layout() {
               // Master and Panel Admin see everything
               if (isMaster) return true;
 
-              // Local Admin ('Administrador') sees everything
+              // ── Plan-based feature gating ──
+              // Financial só disponível nos planos Axé e Orun
+              if (item.id === 'financial' && !canAccess('financial', currentPlan)) return false;
+
+              // Multi-Casas (terreiros) só no plano Orun
+              if (item.id === 'terreiros' && !canAccess('multi_casas', currentPlan)) return false;
+
+              // Comunicados (broadcast) disponível em todos os planos
+              // (já tem controle por adminOnly)
+
+              // Local Admin ('Administrador') sees everything (respeitando plano)
               if (role === 'ADMIN') {
                 return true;
               }
