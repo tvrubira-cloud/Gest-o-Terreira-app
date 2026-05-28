@@ -512,7 +512,7 @@ async function findAllUsersByCpf(cpf: string): Promise<{ data: any[] | null; err
   for (const variant of variants) {
     const { data, error } = await supabase
       .from('users')
-      .select('id, cpf, nome_completo, nome_de_santo, role, terreiro_id, password')
+      .select('*')
       .ilike('cpf', variant);
 
     if (error) return { data: null, error };
