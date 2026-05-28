@@ -39,7 +39,7 @@ export type Feature =
   | 'central_panel';
 
 export const PLAN_FEATURES: Record<PlanType, Feature[]> = {
-  trial: ['members', 'crm_spiritual', 'events', 'broadcast_push', 'knowledge_hub'],
+  trial: ['members', 'crm_spiritual', 'events', 'broadcast_push', 'knowledge_hub', 'financial', 'cash_flow', 'pix_integration', 'charges', 'whatsapp', 'inventory', 'shopping_list', 'multi_casas', 'access_control', 'central_panel'],
   ile: ['members', 'crm_spiritual', 'events', 'broadcast_push', 'knowledge_hub'],
   axe: ['members', 'crm_spiritual', 'events', 'broadcast_push', 'knowledge_hub', 'financial', 'cash_flow', 'pix_integration', 'charges', 'whatsapp'],
   orun: ['members', 'crm_spiritual', 'events', 'broadcast_push', 'knowledge_hub', 'financial', 'cash_flow', 'pix_integration', 'charges', 'whatsapp', 'inventory', 'shopping_list', 'multi_casas', 'access_control', 'central_panel'],
