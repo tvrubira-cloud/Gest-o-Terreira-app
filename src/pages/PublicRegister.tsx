@@ -21,6 +21,8 @@ export default function PublicRegister() {
   const registerTerreiro = useStore((s) => s.registerTerreiro);
   const checkExistingCpfWithTerreiros = useStore((s) => s.checkExistingCpfWithTerreiros);
   const migrateUserToTerreiro = useStore((s) => s.migrateUserToTerreiro);
+  const login = useStore((s) => s.login);
+  const initializeData = useStore((s) => s.initializeData);
   const isLoading = useStore((s) => s.isLoading);
 
   const [step] = useState<'form' | 'success' | 'migrate'>('form');
@@ -330,6 +332,15 @@ export default function PublicRegister() {
       await sendCredentialsEmail();
       localStorage.setItem('orun_saved_cpf', cpfDigits);
       localStorage.setItem('orun_remember_cpf', 'true');
+
+      if (plano !== 'trial') {
+        const loggedIn = await login(cpfDigits, senha);
+        if (loggedIn) {
+          await initializeData();
+          navigate('/planos');
+          return;
+        }
+      }
       navigate('/login');
     } else {
       setError('Este CPF ja esta em uso. Tente outro ou faca login.');

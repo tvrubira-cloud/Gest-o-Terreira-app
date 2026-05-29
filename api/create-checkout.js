@@ -1,19 +1,10 @@
 // =============================================================
 //  /api/create-checkout.js
 //  Vercel Serverless Function — Cria sessão Stripe Checkout
-//
-//  Fluxo:
-//   1. Frontend envia { plan, billing, terreiroId, email }
-//   2. Usa Price ID do Stripe (produto já cadastrado no dashboard)
-//   3. Retorna a URL para redirecionar o usuário
-//
-//  Variáveis de ambiente (Vercel → Settings → Env):
-//   STRIPE_SECRET_KEY   — Chave secreta do Stripe (sk_test_xxx / sk_live_xxx)
-//   APP_URL             — URL base do app (ex: https://orunapp.com.br)
 // =============================================================
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
-const APP_URL = process.env.APP_URL || 'http://localhost:5173';
+const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
 const PLAN_PRICE_IDS = {
   ile_month: 'price_1TcScVHzk9cIblw9iVJRstc1',
@@ -25,57 +16,41 @@ const PLAN_PRICE_IDS = {
 };
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method Not Allowed" });
-  }
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   if (!STRIPE_SECRET_KEY) {
-    return res.status(500).json({ error: "Stripe não configurado (STRIPE_SECRET_KEY ausente)" });
+    return res.status(500).json({ error: 'Stripe não configurado (STRIPE_SECRET_KEY ausente)' });
   }
 
-  let body = "";
-  await new Promise((resolve, reject) => {
-    req.on("data", (chunk) => (body += chunk.toString()));
-    req.on("end", resolve);
-    req.on("error", reject);
-  });
+  // O Vercel faz parse automático do JSON quando Content-Type é application/json
+  const payload = req.body;
 
-  let payload;
-  try {
-    payload = JSON.parse(body);
-  } catch {
-    return res.status(400).json({ error: "Body inválido" });
+  if (!payload || typeof payload !== 'object') {
+    console.error('[create-checkout] Body recebido:', payload);
+    return res.status(400).json({ error: 'Body inválido ou não é JSON' });
   }
 
   const { plan, billing = 'month', terreiroId, email, userId, successUrl, cancelUrl } = payload;
 
-  if (!plan) {
-    return res.status(400).json({ error: "Plano é obrigatório" });
-  }
+  if (!plan) return res.status(400).json({ error: 'Plano é obrigatório' });
 
   const priceId = PLAN_PRICE_IDS[`${plan}_${billing}`];
-
-  if (!priceId) {
-    return res.status(400).json({ error: `Preço não encontrado para ${plan} ${billing}` });
-  }
-
-  if (!terreiroId) {
-    return res.status(400).json({ error: "terreiroId é obrigatório" });
-  }
+  if (!priceId) return res.status(400).json({ error: `Preço não encontrado para ${plan} ${billing}` });
+  if (!terreiroId) return res.status(400).json({ error: 'terreiroId é obrigatório' });
 
   try {
-    const stripe = (await import('stripe')).default;
-    const stripeClient = stripe(STRIPE_SECRET_KEY);
+    const { default: Stripe } = await import('stripe');
+    const stripeClient = new Stripe(STRIPE_SECRET_KEY);
 
     const session = await stripeClient.checkout.sessions.create({
-      mode: 'payment',
-      payment_method_types: ['card', 'boleto'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
       metadata: {
         plan,
         billing,
@@ -89,15 +64,9 @@ export default async function handler(req, res) {
     });
 
     console.log(`[create-checkout] Sessão: ${session.id} | ${plan} ${billing} | terreiro: ${terreiroId}`);
-
-    return res.status(200).json({
-      sessionId: session.id,
-      url: session.url,
-    });
+    return res.status(200).json({ sessionId: session.id, url: session.url });
   } catch (err) {
-    console.error("[create-checkout] Erro:", err);
+    console.error('[create-checkout] Erro Stripe:', err);
     return res.status(500).json({ error: String(err) });
   }
 }
-
-export const config = { api: { bodyParser: false } };
