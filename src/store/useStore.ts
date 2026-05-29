@@ -21,6 +21,22 @@ export const PLAN_PRICES: Record<PlanType, number> = {
   orun: 97,
 };
 
+export const PLAN_PRICES_ANNUAL: Record<PlanType, number> = {
+  trial: 0,
+  ile: 564,
+  axe: 804,
+  orun: 1008,
+};
+
+export const PLAN_PRICE_IDS: Record<string, string> = {
+  ile_month: 'price_1TcScVHzk9cIblw9iVJRstc1',
+  ile_year: 'price_1TcSdbHzk9cIblw9Xkj4VaBP',
+  axe_month: 'price_1TcSeqHzk9cIblw9YM4HgFzd',
+  axe_year: 'price_1TcSgXHzk9cIblw9DGRhbAIQ',
+  orun_month: 'price_1TcShRHzk9cIblw9bjWj5XNY',
+  orun_year: 'price_1TcSiyHzk9cIblw9FkVZuo54',
+};
+
 export type Feature =
   | 'members'
   | 'crm_spiritual'

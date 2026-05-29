@@ -49,6 +49,7 @@ export default function Layout() {
 
   const menuItems = [
     { id: 'dashboard', path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', adminOnly: false },
+    { id: 'planos', path: '/planos', icon: Crown, label: 'Planos', adminOnly: false },
     { id: 'hub-ia', path: '/hub-ia', icon: Sparkles, label: 'Centro de IA', adminOnly: false },
     { id: 'members', path: '/members', icon: Users, label: isStaff ? 'Membros da Casa' : 'Meu Perfil', adminOnly: false },
     { id: 'events', path: '/events', icon: Calendar, label: 'Agenda e Eventos', adminOnly: false },

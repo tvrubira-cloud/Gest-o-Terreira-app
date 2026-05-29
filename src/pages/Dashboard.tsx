@@ -205,21 +205,13 @@ export default function Dashboard() {
                 dias restantes
               </div>
             </div>
-            <div style={{
-              width: 120,
-              height: 4,
-              background: 'rgba(255,255,255,0.08)',
-              borderRadius: 2,
-              overflow: 'hidden',
-            }}>
-              <div style={{
-                height: '100%',
-                width: `${Math.max(0, Math.min(100, Math.ceil((new Date(currentTerreiro.planExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) / 21 * 100))}%`,
-                background: 'linear-gradient(90deg, #C9A84C, #0A4A4D)',
-                borderRadius: 2,
-                transition: 'width 0.5s ease',
-              }} />
-            </div>
+            <button
+              onClick={() => navigate('/planos')}
+              className="glow-fx"
+              style={{ padding: '0.6rem 1.2rem', background: 'linear-gradient(135deg, #C9A84C, #0A4A4D)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+            >
+              Assinar Agora
+            </button>
           </div>
         </motion.div>
       )}

@@ -1,20 +1,22 @@
 // =============================================================
 //  /api/webhook-stripe.js
-//  Vercel Serverless Function — Webhook AgenteX/Stripe
+//  Vercel Serverless Function — Webhook Stripe
 //
 //  Fluxo:
-//   1. AgenteX envia POST após confirmação de pagamento Stripe
-//   2. Buscamos o usuário pelo email no Supabase
-//   3. Buscamos o terreiro vinculado ao usuário (campo created_by)
-//   4. Ativamos o plano Pro no terreiro (campo `plan` = 'pro')
+//   1. Stripe envia evento (checkout.session.completed)
+//   2. Validamos a assinatura com stripe.webhooks.constructEvent
+//   3. Extraímos plan, terreiro_id dos metadados
+//   4. Atualizamos o plano no Supabase
 //
-//  Variáveis de ambiente necessárias (Vercel → Settings → Env):
-//   SUPABASE_URL         — URL do Supabase (sem o VITE_ prefix)
-//   SUPABASE_SERVICE_KEY — Service Role Key (chave secreta do Supabase)
-//   WEBHOOK_SECRET       — (opcional) segredo compartilhado com AgenteX
+//  Variáveis de ambiente (Vercel → Settings → Env):
+//   STRIPE_SECRET_KEY      — Chave secreta do Stripe (sk_test_xxx)
+//   STRIPE_WEBHOOK_SECRET  — Webhook signing secret (whsec_xxx)
+//   SUPABASE_URL            — URL do Supabase
+//   SUPABASE_SERVICE_KEY    — Service Role Key do Supabase
 // =============================================================
 
-// ── Helper: requisição autenticada ao Supabase REST API ───────
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 
 async function supabaseRequest(path, options = {}) {
   const url = `${process.env.SUPABASE_URL}/rest/v1${path}`;
@@ -32,126 +34,129 @@ async function supabaseRequest(path, options = {}) {
   return { status: res.status, data: text ? JSON.parse(text) : null };
 }
 
-// ── Handler principal ──────────────────────────────────────────
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
-  // ── 1. Ler o body como texto bruto ────────────────────────────
-  let body = "";
+  let rawBody = "";
   await new Promise((resolve, reject) => {
-    req.on("data", (chunk) => (body += chunk.toString()));
+    req.on("data", (chunk) => (rawBody += chunk.toString()));
     req.on("end", resolve);
     req.on("error", reject);
   });
 
-  // ── 2. (Opcional) Validar segredo compartilhado ───────────────
+  const signature = req.headers["stripe-signature"];
+
+  // ── Tentativa 1: Webhook nativo do Stripe (com assinatura) ──
+  if (signature && STRIPE_WEBHOOK_SECRET && STRIPE_SECRET_KEY) {
+    try {
+      const stripe = (await import('stripe')).default;
+      const stripeClient = stripe(STRIPE_SECRET_KEY);
+      const event = stripeClient.webhooks.constructEvent(rawBody, signature, STRIPE_WEBHOOK_SECRET);
+
+      console.log(`[webhook-stripe] Evento Stripe recebido: ${event.type}`);
+
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        const metadata = session.metadata || {};
+        const { plan, terreiro_id, billing } = metadata;
+
+        if (!plan || !terreiro_id) {
+          console.warn("[webhook-stripe] Sessão sem metadados de plano/terreiro");
+          return res.status(200).json({ received: true, processed: false, reason: "missing_metadata" });
+        }
+
+        if (!['ile', 'axe', 'orun'].includes(plan)) {
+          console.warn(`[webhook-stripe] Plano inválido nos metadados: ${plan}`);
+          return res.status(200).json({ received: true, processed: false, reason: "invalid_plan" });
+        }
+
+        const dias = billing === 'year' ? 365 : 30;
+        const expiracao = new Date(Date.now() + dias * 24 * 60 * 60 * 1000).toISOString();
+
+        const { status: updateStatus } = await supabaseRequest(
+          `/terreiros?id=eq.${encodeURIComponent(terreiro_id)}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              plan,
+              plan_status: "active",
+              plan_expires_at: expiracao,
+              plan_updated_at: new Date().toISOString(),
+            }),
+          }
+        );
+
+        if (updateStatus === 200 || updateStatus === 204) {
+          console.log(`[webhook-stripe] Plano ${plan} ativado — terreiro: ${terreiro_id}`);
+          return res.status(200).json({ received: true, processed: true, plan, terreiro_id, expiracao });
+        } else {
+          console.error(`[webhook-stripe] Falha ao atualizar terreiro ${terreiro_id}. Status: ${updateStatus}`);
+          return res.status(500).json({ received: true, processed: false, reason: "update_failed" });
+        }
+      }
+
+      return res.status(200).json({ received: true, processed: false, type: event.type });
+    } catch (err) {
+      console.error("[webhook-stripe] Erro na validação Stripe:", err);
+      return res.status(400).json({ error: "Assinatura inválida" });
+    }
+  }
+
+  // ── Tentativa 2: Formato legado (AgenteX / compatibilidade) ──
   const secret = process.env.WEBHOOK_SECRET;
   if (secret) {
-    const headerSecret =
-      req.headers["x-webhook-secret"] || req.headers["x-agenteX-secret"] || "";
+    const headerSecret = req.headers["x-webhook-secret"] || req.headers["x-agenteX-secret"] || "";
     if (headerSecret !== secret) {
-      console.warn("[webhook-stripe] Segredo inválido — requisição rejeitada.");
       return res.status(401).json({ error: "Não autorizado" });
     }
   }
 
-  // ── 3. Parsear payload ────────────────────────────────────────
   let payload;
   try {
-    payload = JSON.parse(body);
+    payload = JSON.parse(rawBody);
   } catch {
     return res.status(400).json({ error: "Body inválido" });
   }
 
-  console.log("[webhook-stripe] Evento recebido:", JSON.stringify(payload));
-
   const { senderEmail, plan, notificationType, terreiro_id, plan_expires_at } = payload;
-
-  // Aceita tanto o formato AgenteX quanto legado PagSeguro
-  const isPago =
-    notificationType === "preApproval" ||
-    notificationType === "checkout.session.completed" ||
-    plan === "mensal" ||
-    plan === "pro";
+  const isPago = notificationType === "preApproval" || notificationType === "checkout.session.completed" || plan === "mensal" || plan === "pro";
 
   if (!isPago || !senderEmail) {
-    console.log("[webhook-stripe] Evento ignorado — não é pagamento ou sem email.");
     return res.status(200).json({ received: true, processed: false, reason: "not_paid_or_no_email" });
   }
 
   try {
-    // ── 4. Buscar usuário pelo email ──────────────────────────────
-    const { data: users } = await supabaseRequest(
-      `/users?email=eq.${encodeURIComponent(senderEmail)}&limit=1`
-    );
-
+    const { data: users } = await supabaseRequest(`/users?email=eq.${encodeURIComponent(senderEmail)}&limit=1`);
     if (!users || users.length === 0) {
-      console.warn(`[webhook-stripe] Usuário não encontrado: ${senderEmail}`);
-      return res
-        .status(200)
-        .json({ received: true, processed: false, reason: "user_not_found" });
+      return res.status(200).json({ received: true, processed: false, reason: "user_not_found" });
     }
 
-    const user = users[0];
-    const userId = user.id;
-    console.log(`[webhook-stripe] Usuário encontrado: ${userId}`);
-
-    // ── 5. Determinar o terreiro a ativar ─────────────────────────
-    // Prioridade: terreiro_id vindo no payload → fallback: buscar pelo created_by
-    let terreiroId = terreiro_id || null;
-
-    if (!terreiroId) {
-      const { data: terreiros } = await supabaseRequest(
-        `/terreiros?admin_id=eq.${encodeURIComponent(userId)}&limit=1`
-      );
-
+    let tId = terreiro_id || null;
+    if (!tId) {
+      const { data: terreiros } = await supabaseRequest(`/terreiros?admin_id=eq.${encodeURIComponent(users[0].id)}&limit=1`);
       if (!terreiros || terreiros.length === 0) {
-        console.warn(
-          `[webhook-stripe] Terreiro não encontrado para userId: ${userId}`
-        );
-        return res
-          .status(200)
-          .json({ received: true, processed: false, reason: "terreiro_not_found" });
+        return res.status(200).json({ received: true, processed: false, reason: "terreiro_not_found" });
       }
-
-      terreiroId = terreiros[0].id;
+      tId = terreiros[0].id;
     }
 
-    console.log(`[webhook-stripe] Terreiro alvo: ${terreiroId}`);
-
-    // ── 6. Calcular data de expiração (30 dias se não informada) ──
-    const expiracao =
-      plan_expires_at ||
-      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-    // ── 7. Ativar plano Pro no terreiro ───────────────────────────
-    const { status: updateStatus } = await supabaseRequest(
-      `/terreiros?id=eq.${encodeURIComponent(terreiroId)}`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          plan: "pro",
-          plan_expires_at: expiracao,
-          plan_updated_at: new Date().toISOString(),
-        }),
-      }
-    );
+    const expiracao = plan_expires_at || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { status: updateStatus } = await supabaseRequest(`/terreiros?id=eq.${encodeURIComponent(tId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        plan: plan || "pro",
+        plan_status: "active",
+        plan_expires_at: expiracao,
+        plan_updated_at: new Date().toISOString(),
+      }),
+    });
 
     if (updateStatus === 200 || updateStatus === 204) {
-      console.log(
-        `[webhook-stripe] ✅ Plano Pro ativado — terreiro: ${terreiroId} | expira: ${expiracao}`
-      );
-      return res.status(200).json({ received: true, processed: true, terreiroId, expiracao });
+      return res.status(200).json({ received: true, processed: true, terreiroId: tId, expiracao });
     } else {
-      console.error(
-        `[webhook-stripe] Falha ao atualizar terreiro ${terreiroId}. Status: ${updateStatus}`
-      );
-      return res
-        .status(500)
-        .json({ received: true, processed: false, reason: "update_failed" });
+      return res.status(500).json({ received: true, processed: false, reason: "update_failed" });
     }
   } catch (err) {
     console.error("[webhook-stripe] Erro interno:", err);
@@ -159,5 +164,4 @@ export default async function handler(req, res) {
   }
 }
 
-// ── Necessário para leitura do raw body no Vercel ─────────────
 export const config = { api: { bodyParser: false } };
