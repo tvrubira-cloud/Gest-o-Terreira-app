@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useStore, PLAN_LABELS, PLAN_FEATURES, type PlanType, type Feature } from '../store/useStore';
 import { motion } from 'framer-motion';
 import { Crown, CheckCircle2, Loader2, Sparkles, CreditCard, ArrowLeft, Zap } from 'lucide-react';
@@ -92,10 +92,22 @@ export default function Plans() {
 
   const searchParams = new URLSearchParams(window.location.search);
   const paymentStatus = searchParams.get('payment');
-  if (paymentStatus === 'success') {
-    initializeData(currentTerreiroId || undefined);
-    navigate('/dashboard', { replace: true });
-  }
+  const preselectedPlan = searchParams.get('plan') as PlanType | null;
+
+  useEffect(() => {
+    if (paymentStatus === 'success') {
+      initializeData(currentTerreiroId || undefined);
+      navigate('/dashboard', { replace: true });
+    }
+  }, []);
+
+  const planRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    if (preselectedPlan && planRefs.current[preselectedPlan]) {
+      planRefs.current[preselectedPlan]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [preselectedPlan]);
 
   const currentPlan = currentTerreiro?.plan || 'trial';
 
@@ -210,6 +222,7 @@ export default function Plans() {
           return (
             <motion.div
               key={plan}
+              ref={(el) => { planRefs.current[plan] = el; }}
               whileHover={{ y: -4 }}
               className={`glass-panel ${isCurrent ? 'glow-fx' : ''}`}
               style={{
