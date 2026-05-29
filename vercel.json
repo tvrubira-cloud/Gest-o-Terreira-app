@@ -3,5 +3,4 @@
     { "source": "/", "destination": "/landing.html" },
     { "source": "/((?!api/|landing\\.html|assets/).*)", "destination": "/index.html" }
   ],
-  "nodeVersion": "22.x"
 }
