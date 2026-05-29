@@ -333,13 +333,16 @@ export default function PublicRegister() {
       localStorage.setItem('orun_saved_cpf', cpfDigits);
       localStorage.setItem('orun_remember_cpf', 'true');
 
-      if (plano !== 'trial') {
-        const loggedIn = await login(cpfDigits, senha);
-        if (loggedIn) {
-          await initializeData();
+      await new Promise(r => setTimeout(r, 1000));
+      const loggedIn = await login(cpfDigits, senha);
+      if (loggedIn) {
+        await initializeData();
+        if (plano !== 'trial') {
           navigate('/planos');
-          return;
+        } else {
+          navigate('/dashboard');
         }
+        return;
       }
       navigate('/login');
     } else {
