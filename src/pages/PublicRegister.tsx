@@ -71,6 +71,20 @@ export default function PublicRegister() {
       .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   };
 
+  const sendWelcomeEmail = async (plan: string) => {
+    const { error } = await supabase.functions.invoke('send-welcome-email', {
+      body: {
+        email: email.trim().toLowerCase(),
+        nomeCompleto: nomeCompleto.trim(),
+        nomeTerreiro: nomeTerreiro.trim(),
+        cpf: cpfDigits,
+        plan,
+        loginUrl: `${window.location.origin}/login`,
+      },
+    });
+    if (error) console.warn('[PublicRegister] Falha ao enviar e-mail de boas-vindas:', error);
+  };
+
   const sendCredentialsEmail = async () => {
     const { error } = await supabase.functions.invoke('send-credentials-email', {
       body: {
@@ -330,6 +344,7 @@ export default function PublicRegister() {
 
     if (success) {
       await sendCredentialsEmail();
+      await sendWelcomeEmail(plano);
       localStorage.setItem('orun_saved_cpf', cpfDigits);
       localStorage.setItem('orun_remember_cpf', 'true');
 
