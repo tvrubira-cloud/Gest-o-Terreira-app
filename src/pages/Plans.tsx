@@ -102,12 +102,27 @@ export default function Plans() {
   }, []);
 
   const planRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const autoCheckoutDone = useRef(false);
 
   useEffect(() => {
     if (preselectedPlan && planRefs.current[preselectedPlan]) {
       planRefs.current[preselectedPlan]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [preselectedPlan]);
+
+  // Auto-inicia o checkout quando vem da landing com ?plan=
+  useEffect(() => {
+    if (
+      preselectedPlan &&
+      preselectedPlan !== 'trial' &&
+      currentUser &&
+      currentTerreiro &&
+      !autoCheckoutDone.current
+    ) {
+      autoCheckoutDone.current = true;
+      handleSubscribe(preselectedPlan);
+    }
+  }, [preselectedPlan, currentUser, currentTerreiro]);
 
   const currentPlan = currentTerreiro?.plan || 'trial';
 
