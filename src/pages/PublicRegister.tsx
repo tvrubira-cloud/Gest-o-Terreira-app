@@ -338,7 +338,7 @@ export default function PublicRegister() {
       if (loggedIn) {
         await initializeData();
         if (plano !== 'trial') {
-          navigate('/planos');
+          navigate(`/planos?plan=${plano}`);
         } else {
           navigate('/dashboard');
         }

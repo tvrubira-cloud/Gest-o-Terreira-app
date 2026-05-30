@@ -224,11 +224,11 @@ export default function Plans() {
               key={plan}
               ref={(el) => { planRefs.current[plan] = el; }}
               whileHover={{ y: -4 }}
-              className={`glass-panel ${isCurrent ? 'glow-fx' : ''}`}
+              className={`glass-panel ${isCurrent || plan === preselectedPlan ? 'glow-fx' : ''}`}
               style={{
                 padding: '2rem',
                 borderRadius: 'var(--panel-radius)',
-                border: isCurrent ? `2px solid ${color}` : '1px solid var(--glass-border)',
+                border: isCurrent ? `2px solid ${color}` : plan === preselectedPlan ? `2px solid ${color}` : '1px solid var(--glass-border)',
                 background: isCurrent ? `rgba(${plan === 'ile' ? '0,240,255' : plan === 'axe' ? '157,78,221' : plan === 'orun' ? '255,107,53' : '201,168,76'},0.06)` : undefined,
                 display: 'flex',
                 flexDirection: 'column',
