@@ -343,8 +343,9 @@ export default function PublicRegister() {
     );
 
     if (success) {
-      await sendCredentialsEmail();
-      await sendWelcomeEmail(plano);
+      // E-mails em background — não bloqueiam o fluxo principal
+      sendCredentialsEmail().catch(e => console.warn('Email credenciais falhou:', e));
+      sendWelcomeEmail(plano).catch(e => console.warn('Email boas-vindas falhou:', e));
       localStorage.setItem('orun_saved_cpf', cpfDigits);
       localStorage.setItem('orun_remember_cpf', 'true');
 
