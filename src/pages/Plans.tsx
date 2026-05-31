@@ -102,27 +102,12 @@ export default function Plans() {
   }, []);
 
   const planRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const autoCheckoutDone = useRef(false);
 
   useEffect(() => {
     if (preselectedPlan && planRefs.current[preselectedPlan]) {
       planRefs.current[preselectedPlan]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [preselectedPlan]);
-
-  // Auto-inicia o checkout quando vem da landing com ?plan=
-  useEffect(() => {
-    if (
-      preselectedPlan &&
-      preselectedPlan !== 'trial' &&
-      currentUser &&
-      currentTerreiro &&
-      !autoCheckoutDone.current
-    ) {
-      autoCheckoutDone.current = true;
-      handleSubscribe(preselectedPlan);
-    }
-  }, [preselectedPlan, currentUser, currentTerreiro]);
 
   const currentPlan = currentTerreiro?.plan || 'trial';
 
@@ -223,7 +208,7 @@ export default function Plans() {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
-        {PLAN_ORDER.map((plan) => {
+        {PLAN_ORDER.filter(plan => currentPlan === 'trial' || plan !== 'trial').map((plan) => {
           const isCurrent = plan === currentPlan && plan !== 'trial';
           const isTrial = plan === 'trial';
           const color = PLAN_COLORS[plan];
