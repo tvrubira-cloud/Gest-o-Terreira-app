@@ -28,6 +28,29 @@ export default function Login() {
     }
   }, [currentUser, navigate]);
 
+  // Auto-login após retorno do Stripe Checkout
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment');
+    const cpfParam = params.get('cpf');
+
+    if (paymentStatus === 'success' && cpfParam && !currentUser) {
+      const savedCpf = decodeURIComponent(cpfParam);
+      const savedPwd = localStorage.getItem('orun_temp_pwd_' + savedCpf);
+
+      if (savedPwd) {
+        login(savedCpf, savedPwd).then(async (ok) => {
+          if (ok) {
+            localStorage.removeItem('orun_temp_pwd_' + savedCpf);
+            const { initializeData } = useStore.getState();
+            await initializeData();
+            navigate('/dashboard', { replace: true });
+          }
+        });
+      }
+    }
+  }, []);
+
   const handleCpfSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cpf) return setError('Por favor, informe seu CPF.');
