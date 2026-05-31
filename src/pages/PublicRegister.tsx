@@ -863,11 +863,15 @@ export default function PublicRegister() {
               marginTop: 4,
             }}
           >
-            {isLoading ? 'Criando terreiro...' : '✦ Criar Terreiro — Começar Grátis'}
+            {isLoading
+              ? 'Criando terreiro...'
+              : plano === 'trial'
+                ? '✦ Criar Terreiro — Começar Grátis'
+                : '✦ Criar Terreiro — Ir para Pagamento'}
           </button>
 
           <p style={{ textAlign: 'center', fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', marginTop: -4 }}>
-            Sem cartão de crédito · Cancela quando quiser
+            {plano === 'trial' ? 'Sem cartão de crédito · Cancela quando quiser' : 'Você será redirecionado para o pagamento seguro'}
           </p>
 
           <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)' }}>
