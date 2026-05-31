@@ -372,12 +372,16 @@ export default function PublicRegister() {
             }),
           });
           const data = await res.json();
+          console.log('[Checkout] status:', res.status, 'data:', JSON.stringify(data));
           if (data.url) {
+            console.log('[Checkout] Redirecionando para Stripe:', data.url);
             window.location.href = data.url;
             return;
+          } else {
+            console.error('[Checkout] URL não recebida:', data);
           }
         } catch (e) {
-          console.error('Erro ao criar checkout:', e);
+          console.error('[Checkout] Erro:', e);
         }
       }
 
