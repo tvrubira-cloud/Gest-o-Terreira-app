@@ -348,15 +348,44 @@ export default function PublicRegister() {
       localStorage.setItem('orun_saved_cpf', cpfDigits);
       localStorage.setItem('orun_remember_cpf', 'true');
 
+      // Plano pago → vai direto para o Stripe sem entrar no app
+      if (plano !== 'trial') {
+        localStorage.setItem('orun_temp_pwd_' + cpfDigits, senha);
+        try {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+          const res = await fetch(`${supabaseUrl}/functions/v1/create-checkout`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+            },
+            body: JSON.stringify({
+              plan: plano,
+              billing: 'month',
+              terreiroId: useStore.getState().currentTerreiroId,
+              email: email.trim().toLowerCase(),
+              userId: useStore.getState().currentUser?.id || '',
+              successUrl: `${window.location.origin}/login?payment=success&cpf=${encodeURIComponent(cpfDigits)}`,
+              cancelUrl: `${window.location.origin}/cadastro?plano=${plano}&payment=cancelled`,
+            }),
+          });
+          const data = await res.json();
+          if (data.url) {
+            window.location.href = data.url;
+            return;
+          }
+        } catch (e) {
+          console.error('Erro ao criar checkout:', e);
+        }
+      }
+
+      // Trial ou fallback → login normal
       await new Promise(r => setTimeout(r, 1000));
       const loggedIn = await login(cpfDigits, senha);
       if (loggedIn) {
         await initializeData();
-        if (plano !== 'trial') {
-          navigate(`/planos?plan=${plano}`);
-        } else {
-          navigate('/dashboard');
-        }
+        navigate('/dashboard');
         return;
       }
       navigate('/login');
