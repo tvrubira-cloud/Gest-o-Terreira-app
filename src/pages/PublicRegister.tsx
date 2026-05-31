@@ -349,9 +349,18 @@ export default function PublicRegister() {
       localStorage.setItem('orun_saved_cpf', cpfDigits);
       localStorage.setItem('orun_remember_cpf', 'true');
 
-      // Plano pago → vai direto para o Stripe sem entrar no app
+      // Faz login para popular o store com terreiroId
+      await new Promise(r => setTimeout(r, 800));
+      const loggedIn = await login(cpfDigits, senha);
+      if (!loggedIn) { navigate('/login'); return; }
+      await initializeData();
+
+      // Plano pago → abre Stripe direto
       if (plano !== 'trial') {
-        localStorage.setItem('orun_temp_pwd_' + cpfDigits, senha);
+        const terreiroId = useStore.getState().currentTerreiroId;
+        const userId = useStore.getState().currentUser?.id || '';
+        const emailVal = useStore.getState().currentUser?.email || email.trim().toLowerCase();
+        console.log('[Checkout] plano:', plano, 'terreiroId:', terreiroId, 'email:', emailVal);
         try {
           const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
           const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -364,32 +373,26 @@ export default function PublicRegister() {
             body: JSON.stringify({
               plan: plano,
               billing: 'month',
-              terreiroId: useStore.getState().currentTerreiroId,
-              email: email.trim().toLowerCase(),
-              userId: useStore.getState().currentUser?.id || '',
-              successUrl: `${window.location.origin}/login?payment=success&cpf=${encodeURIComponent(cpfDigits)}`,
-              cancelUrl: `${window.location.origin}/cadastro?plano=${plano}&payment=cancelled`,
+              terreiroId,
+              email: emailVal,
+              userId,
+              successUrl: `${window.location.origin}/dashboard?payment=success`,
+              cancelUrl: `${window.location.origin}/planos?payment=cancelled`,
             }),
           });
           const data = await res.json();
+          console.log('[Checkout] resposta:', res.status, JSON.stringify(data));
           if (data.url) {
             window.location.href = data.url;
             return;
           }
         } catch (e) {
-          console.error('Erro ao criar checkout:', e);
+          console.error('[Checkout] Erro:', e);
         }
       }
 
-      // Trial ou fallback → login normal
-      await new Promise(r => setTimeout(r, 1000));
-      const loggedIn = await login(cpfDigits, senha);
-      if (loggedIn) {
-        await initializeData();
-        navigate('/dashboard');
-        return;
-      }
-      navigate('/login');
+      // Trial ou fallback
+      navigate('/dashboard');
     } else {
       setError('Este CPF ja esta em uso. Tente outro ou faca login.');
     }
