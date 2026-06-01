@@ -343,9 +343,10 @@ export default function PublicRegister() {
     );
 
     if (success) {
-      // E-mails em background — não bloqueiam o fluxo principal
-      sendCredentialsEmail().catch(e => console.warn('Email credenciais falhou:', e));
-      sendWelcomeEmail(plano).catch(e => console.warn('Email boas-vindas falhou:', e));
+      // Trial → e-mail imediato. Plano pago → e-mail só após pagamento (webhook Stripe)
+      if (plano === 'trial') {
+        sendWelcomeEmail(plano).catch(e => console.warn('Email boas-vindas falhou:', e));
+      }
       localStorage.setItem('orun_saved_cpf', cpfDigits);
       localStorage.setItem('orun_remember_cpf', 'true');
 
