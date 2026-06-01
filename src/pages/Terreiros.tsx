@@ -1,11 +1,33 @@
 import { useState, useEffect } from 'react';
-import { useStore } from '../store/useStore';
-import type { Terreiro } from '../store/useStore';
-import { Building2, Search, Edit2, Plus, ArrowLeft, Upload, X, Trash2, Lock, Unlock } from 'lucide-react';
+import { useStore, PLAN_LABELS, PLAN_PRICES } from '../store/useStore';
+import type { Terreiro, PlanType, PlanStatus } from '../store/useStore';
+import { Building2, Search, Edit2, Plus, ArrowLeft, Upload, X, Trash2, Lock, Unlock, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { uploadImage } from '../utils/uploadImage';
 import ConfirmationModal from '../components/ConfirmationModal';
+
+const PLAN_COLORS: Record<PlanType, string> = {
+  trial: '#C9A84C',
+  ile: '#00f0ff',
+  axe: '#9D4EDD',
+  orun: '#ff6b35',
+};
+
+function getDaysRemaining(expiresAt?: string): number | null {
+  if (!expiresAt) return null;
+  const now = new Date();
+  const end = new Date(expiresAt);
+  const diff = end.getTime() - now.getTime();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+function getTrialStartDate(expiresAt?: string): string {
+  if (!expiresAt) return '';
+  const end = new Date(expiresAt);
+  const start = new Date(end.getTime() - 21 * 24 * 60 * 60 * 1000);
+  return start.toLocaleDateString('pt-BR');
+}
 
 export default function Terreiros() {
   const { currentUser, getUserTerreiros, switchTerreiro, currentTerreiroId, addTerreiro, updateTerreiro, deleteTerreiro, toggleBlockTerreiro, users } = useStore();
@@ -151,6 +173,7 @@ export default function Terreiros() {
               <tr style={{ borderBottom: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}>
                 <th style={{ padding: '1rem' }}>Logo</th>
                 <th style={{ padding: '1rem' }}>Nome do Terreiro</th>
+                <th style={{ padding: '1rem' }}>Plano</th>
                 <th style={{ padding: '1rem' }}>Endereço</th>
                 <th style={{ padding: '1rem' }}>Status</th>
                 <th style={{ padding: '1rem', textAlign: 'right' }}>Ações</th>
@@ -160,22 +183,23 @@ export default function Terreiros() {
               {filteredTerreiros.map(t => (
                 <tr key={t.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', backgroundColor: t.isBlocked ? 'rgba(255, 76, 76, 0.05)' : 'transparent', opacity: t.isBlocked ? 0.8 : 1 }}>
                   <td style={{ padding: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 8, background: 'rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
-                        {t.logoUrl ? (
-                          <img src={t.logoUrl} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        ) : (
-                          <Building2 size={20} color="var(--neon-cyan)" />
-                        )}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                          {t.name}
-                          {t.isBlocked && <span style={{ marginLeft: '0.5rem', background: '#ff4c4c', color: '#fff', fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: 4, verticalAlign: 'middle' }}>BLOQUEADO</span>}
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>ID: {t.id}</div>
-                      </div>
+                    <div style={{ width: 40, height: 40, borderRadius: 8, background: 'rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+                      {t.logoUrl ? (
+                        <img src={t.logoUrl} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <Building2 size={20} color="var(--neon-cyan)" />
+                      )}
                     </div>
+                  </td>
+                  <td style={{ padding: '1rem' }}>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 'bold' }}>
+                      {t.name}
+                      {t.isBlocked && <span style={{ marginLeft: '0.5rem', background: '#ff4c4c', color: '#fff', fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: 4, verticalAlign: 'middle' }}>BLOQUEADO</span>}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {t.id.slice(0, 18)}...</div>
+                  </td>
+                  <td style={{ padding: '1rem' }}>
+                    <PlanBadge terreiro={t} />
                   </td>
                   <td style={{ padding: '1rem', color: 'var(--text-muted)' }}>
                     {t.endereco || '-'}
@@ -244,7 +268,7 @@ export default function Terreiros() {
               ))}
               {filteredTerreiros.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                     Nenhum terreiro encontrado.
                   </td>
                 </tr>
@@ -327,6 +351,69 @@ export default function Terreiros() {
             </div>
           </div>
 
+          {editingTerreiro.id && isMaster && (
+            <div>
+              <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.8rem', marginBottom: '1.5rem', color: 'var(--neon-purple)' }}>Plano e Assinatura</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ color: 'var(--text-muted)' }}>Plano</label>
+                  <select
+                    className="search-input glass-panel"
+                    value={editingTerreiro.plan || 'trial'}
+                    onChange={e => setEditingTerreiro({...editingTerreiro, plan: e.target.value as PlanType})}
+                    style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', color: 'var(--text-main)', fontFamily: 'inherit', background: 'rgba(0,0,0,0.3)', cursor: 'pointer' }}
+                  >
+                    {PLANOS_DISPONIVEIS.map(p => (
+                      <option key={p} value={p} style={{ background: '#1a1a2e', color: '#fff' }}>
+                        {PLAN_LABELS[p]} {p !== 'trial' ? `- R$ ${PLAN_PRICES[p]}/mês` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ color: 'var(--text-muted)' }}>Status do Plano</label>
+                  <select
+                    className="search-input glass-panel"
+                    value={editingTerreiro.planStatus || 'trialing'}
+                    onChange={e => setEditingTerreiro({...editingTerreiro, planStatus: e.target.value as PlanStatus})}
+                    style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', color: 'var(--text-main)', fontFamily: 'inherit', background: 'rgba(0,0,0,0.3)', cursor: 'pointer' }}
+                  >
+                    {PLAN_STATUS_OPCOES.map(s => (
+                      <option key={s.value} value={s.value} style={{ background: '#1a1a2e', color: '#fff' }}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ color: 'var(--text-muted)' }}>Data de Expiração</label>
+                  <input
+                    type="date"
+                    className="search-input glass-panel"
+                    value={editingTerreiro.planExpiresAt ? editingTerreiro.planExpiresAt.slice(0, 10) : ''}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setEditingTerreiro({
+                        ...editingTerreiro,
+                        planExpiresAt: val ? new Date(val + 'T23:59:59.000Z').toISOString() : undefined,
+                      });
+                    }}
+                    style={{ padding: '0.8rem', border: '1px solid var(--glass-border)', color: 'var(--text-main)', fontFamily: 'inherit', background: 'rgba(0,0,0,0.3)', cursor: 'pointer', colorScheme: 'dark' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  {editingTerreiro.planExpiresAt && (
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', padding: '0.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+                      {getDaysRemaining(editingTerreiro.planExpiresAt) !== null && (
+                        <>Restam <strong style={{ color: getDaysRemaining(editingTerreiro.planExpiresAt) === 0 ? '#ff4c4c' : '#00f0ff' }}>{getDaysRemaining(editingTerreiro.planExpiresAt)}</strong> dia{getDaysRemaining(editingTerreiro.planExpiresAt) !== 1 ? 's' : ''}</>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
             <button type="submit" className="glass-panel glow-fx" style={{ padding: '1rem 3rem', background: 'linear-gradient(90deg, rgba(0, 240, 255, 0.2), rgba(176, 0, 255, 0.2))', color: '#fff', fontSize: '1.1rem', fontWeight: 'bold', border: '1px solid var(--neon-cyan)', cursor: 'pointer' }}>
               Salvar Alterações
@@ -351,6 +438,61 @@ export default function Terreiros() {
         cancelLabel="Cancelar"
       />
     </motion.div>
+  );
+}
+
+const PLANOS_DISPONIVEIS: PlanType[] = ['trial', 'ile', 'axe', 'orun'];
+const PLAN_STATUS_OPCOES: { value: PlanStatus; label: string }[] = [
+  { value: 'trialing', label: 'Teste' },
+  { value: 'active', label: 'Ativo' },
+  { value: 'past_due', label: 'Vencido' },
+  { value: 'canceled', label: 'Cancelado' },
+  { value: 'expired', label: 'Expirado' },
+];
+
+function PlanBadge({ terreiro }: { terreiro: Terreiro }) {
+  const cor = PLAN_COLORS[terreiro.plan];
+  const dias = getDaysRemaining(terreiro.planExpiresAt);
+  const isTrial = terreiro.plan === 'trial';
+  const isExpired = dias === 0;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <span style={{
+          padding: '0.2rem 0.6rem',
+          borderRadius: 8,
+          background: `${cor}18`,
+          color: cor,
+          fontSize: '0.8rem',
+          fontWeight: 700,
+          border: `1px solid ${cor}40`,
+        }}>
+          {PLAN_LABELS[terreiro.plan]}
+        </span>
+        <span style={{
+          fontSize: '0.7rem',
+          color: isExpired ? '#ff4c4c' : terreiro.planStatus === 'active' ? '#00ff88' : 'var(--text-muted)',
+          fontWeight: 600,
+        }}>
+          {isTrial ? 'Teste' : terreiro.planStatus === 'active' ? 'Pago' : terreiro.planStatus}
+        </span>
+      </div>
+      {dias !== null && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: isExpired ? '#ff4c4c' : 'var(--text-muted)' }}>
+          <Clock size={12} />
+          {isExpired ? 'Expirado' : `${dias} dia${dias !== 1 ? 's' : ''} restante${dias !== 1 ? 's' : ''}`}
+          {isTrial && (
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>
+              (desde {getTrialStartDate(terreiro.planExpiresAt)})
+            </span>
+          )}
+        </div>
+      )}
+      {isTrial && !terreiro.planExpiresAt && (
+        <div style={{ fontSize: '0.75rem', color: '#C9A84C' }}>21 dias grátis (sem data definida)</div>
+      )}
+    </div>
   );
 }
 

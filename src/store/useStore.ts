@@ -1078,6 +1078,9 @@ login: async (cpf, password) => {
       if (terreiroData.evolutionApiUrl !== undefined) updateData.evolution_api_url = terreiroData.evolutionApiUrl;
       if (terreiroData.evolutionApiKey !== undefined) updateData.evolution_api_key = terreiroData.evolutionApiKey;
       if (terreiroData.evolutionInstance !== undefined) updateData.evolution_instance = terreiroData.evolutionInstance;
+      if (terreiroData.plan !== undefined) updateData.plan = terreiroData.plan;
+      if (terreiroData.planStatus !== undefined) updateData.plan_status = terreiroData.planStatus;
+      if (terreiroData.planExpiresAt !== undefined) updateData.plan_expires_at = terreiroData.planExpiresAt;
 
       // Atualiza seguimento se algum campo foi passado
       if (
@@ -1128,6 +1131,19 @@ login: async (cpf, password) => {
   deleteTerreiro: async (id) => {
     set({ isLoading: true });
     try {
+      const { currentUser, users, terreiros } = get();
+      const trueMaster = users.find(u => u.isMaster);
+      const terreiroToDelete = terreiros.find(t => t.id === id);
+      
+      if (terreiroToDelete && trueMaster) {
+        const isThisMasterTerreiro = terreiroToDelete.adminId === trueMaster.id || terreiroToDelete.id === trueMaster.terreiroId;
+        const isTrueMaster = !!currentUser?.isMaster;
+        
+        if (isThisMasterTerreiro && !isTrueMaster) {
+          throw new Error('Ação negada: Você não tem permissão para excluir o Terreiro Master do sistema.');
+        }
+      }
+
       console.log('Tentando excluir terreiro:', id);
       const { error } = await supabase.from('terreiros').delete().eq('id', id);
       if (error) {
