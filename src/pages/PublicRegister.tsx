@@ -379,7 +379,7 @@ export default function PublicRegister() {
               email: emailVal,
               userId,
               successUrl: `${window.location.origin}/dashboard?payment=success`,
-              cancelUrl: `${window.location.origin}/planos?payment=cancelled`,
+              cancelUrl: `${window.location.origin}/landing#planos`,
             }),
           });
           const data = await res.json();
