@@ -71,6 +71,25 @@ export default function PublicRegister() {
       .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   };
 
+  const sendCAPIEvent = async (eventName: string) => {
+    try {
+      const fbc = document.cookie.match(/_fbc=([^;]+)/)?.[1] || '';
+      const fbp = document.cookie.match(/_fbp=([^;]+)/)?.[1] || '';
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_name: eventName,
+          event_source_url: window.location.href,
+          user_data: { user_agent: navigator.userAgent, fbc, fbp },
+        }),
+      });
+    } catch (e) {
+      console.warn('CAPI:', e);
+    }
+  };
+
   const sendWelcomeEmail = async (plan: string) => {
     const { error } = await supabase.functions.invoke('send-welcome-email', {
       body: {
@@ -345,6 +364,7 @@ export default function PublicRegister() {
     if (success) {
       // Trial → e-mail imediato. Plano pago → e-mail só após pagamento (webhook Stripe)
       if (plano === 'trial') {
+        sendCAPIEvent('CompleteRegistration').catch(() => {});
         sendWelcomeEmail(plano).catch(e => console.warn('Email boas-vindas falhou:', e));
       }
       localStorage.setItem('orun_saved_cpf', cpfDigits);
