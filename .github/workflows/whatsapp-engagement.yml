@@ -1,0 +1,30 @@
+name: WhatsApp Engagement
+
+on:
+  schedule:
+    - cron: '0 12 * * *'  # Todo dia às 09:00 Brasília (12:00 UTC)
+  workflow_dispatch:       # Permite rodar manualmente pelo GitHub
+
+jobs:
+  engage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispara automação WhatsApp ORUNAPP
+        run: |
+          curl -s -o response.json -w "%{http_code}" -X POST \
+            https://xbutdadniizewcwqmvuy.supabase.co/functions/v1/whatsapp-engagement \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -d '{}' > status_code.txt
+
+          STATUS=$(cat status_code.txt)
+          echo "Status HTTP: $STATUS"
+          echo "Resposta:"
+          cat response.json
+
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ Erro na automação! Status: $STATUS"
+            exit 1
+          fi
+
+          echo "✅ Automação executada com sucesso!"
