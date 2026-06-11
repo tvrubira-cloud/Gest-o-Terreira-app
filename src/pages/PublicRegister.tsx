@@ -455,8 +455,8 @@ export default function PublicRegister() {
   if (step === 'success') {
     return (
       <div style={pageStyle}>
-        <div style={cardStyle}>
-          {/* Logo */}
+      <div className="card-container">
+        {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <div style={{
               width: 64, height: 64, borderRadius: '50%', margin: '0 auto 16px',
@@ -509,8 +509,8 @@ export default function PublicRegister() {
 
     return (
       <div style={pageStyle}>
-        <div style={cardStyle}>
-          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+      <div className="card-container">
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <div style={{
               width: 64, height: 64, borderRadius: '50%', margin: '0 auto 16px',
               background: 'linear-gradient(135deg, rgba(201,168,76,0.4), rgba(10,74,77,0.2))',
@@ -662,7 +662,7 @@ export default function PublicRegister() {
   /* ── Formulário ── */
   return (
     <div style={pageStyle}>
-      <div style={cardStyle}>
+      <div className="card-container">
         {/* Cabeçalho */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{
@@ -765,7 +765,7 @@ export default function PublicRegister() {
           </div>
 
           {/* Senha */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="grid-2-cols">
             <div>
               <label style={labelStyle}>Senha *</label>
               <div style={{ position: 'relative' }}>
@@ -956,16 +956,6 @@ const pageStyle: React.CSSProperties = {
   fontFamily: "'Inter', sans-serif",
 };
 
-const cardStyle: React.CSSProperties = {
-  width: '100%',
-  maxWidth: 520,
-  background: '#131920',
-  border: '0.5px solid rgba(255,255,255,0.08)',
-  borderRadius: 20,
-  padding: '40px 36px',
-  boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
-};
-
 const titleStyle: React.CSSProperties = {
   fontFamily: "'Sora', 'Inter', sans-serif",
   fontWeight: 800,
@@ -995,4 +985,29 @@ const globalStyle = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
   input::placeholder { color: rgba(255,255,255,0.2); }
   button:hover { filter: brightness(1.1); }
+
+  .card-container {
+    width: 100%;
+    max-width: 520px;
+    background: #131920;
+    border: 0.5px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 40px 36px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+  }
+
+  .grid-2-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  @media (max-width: 500px) {
+    .card-container {
+      padding: 32px 20px;
+    }
+    .grid-2-cols {
+      grid-template-columns: 1fr;
+    }
+  }
 `;
