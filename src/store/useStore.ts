@@ -997,6 +997,11 @@ login: async (cpf, password) => {
         initialized: false 
       });
 
+      // Atualiza last_login_at
+      supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', user.id).then(({ error }) => {
+        if (error) console.error('Erro ao atualizar last_login_at:', error.message);
+      });
+
       await get().initializeData(terreiroId || undefined);
 
       localStorage.setItem('terreiro-session', JSON.stringify({ 

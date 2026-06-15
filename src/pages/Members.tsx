@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStore, defaultSpiritualData } from '../store/useStore';
 import type { User, SpiritualData } from '../store/useStore';
-import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2, UserCheck, UserX, Calendar, CheckCircle, Camera, X, MessageCircle } from 'lucide-react';
+import { Users, Search, Edit2, Plus, ArrowLeft, Upload, User as UserIcon, Trash2, Loader2, UserCheck, UserX, Calendar, CheckCircle, Camera, X, MessageCircle, Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { uploadImage } from '../utils/uploadImage';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -118,15 +118,32 @@ export default function Members() {
 
   const clearSelection = () => { setSelectedIds(new Set()); setBulkSegPanel(false); setBulkSegTipo(''); setBulkSegOrigem(''); setBulkDeleteConfirm(false); setShowWhatsAppPanel(false); };
 
-  const openWhatsApp = (phone: string) => {
+  const openWhatsApp = (phone: string, text?: string) => {
     const cleaned = phone.replace(/\D/g, '');
     if (!cleaned) return;
     const number = cleaned.startsWith('55') ? cleaned : `55${cleaned}`;
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const url = isMobile
+    
+    let url = isMobile
       ? `whatsapp://send?phone=${number}`
       : `https://web.whatsapp.com/send?phone=${number}`;
+      
+    if (text) {
+      url += `&text=${encodeURIComponent(text)}`;
+    }
     window.open(url, '_blank');
+  };
+
+  const sendAccessLink = (user: User) => {
+    const phone = user.whatsapp || user.telefone || '';
+    if (!phone) {
+      alert('Usuário não possui telefone cadastrado.');
+      return;
+    }
+    const terreiroName = currentTerreiro?.name || 'Terreiro';
+    const appUrl = window.location.origin;
+    const msg = `Olá ${user.nomeCompleto}! Seu cadastro no ${terreiroName} foi realizado com sucesso.\n\nVocê já pode acessar o nosso sistema pelo link: ${appUrl}\n\nSeu login é o seu CPF: ${user.cpf}\nA sua senha é a que foi informada pela administração.\n\nQualquer dúvida, estamos à disposição!`;
+    openWhatsApp(phone, msg);
   };
 
   const handleBulkStatus = async (status: 'ativo' | 'inativo') => {
@@ -602,12 +619,22 @@ export default function Members() {
                               {u.nomeCompleto}
                             </span>
                             {phone ? (
-                              <button
-                                onClick={() => openWhatsApp(phone)}
-                                style={{ flexShrink: 0, padding: '0.3rem 0.7rem', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(37,211,102,0.15)', border: '1px solid #25d366', color: '#25d366', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                              >
-                                <MessageCircle size={12} /> Abrir
-                              </button>
+                              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                <button
+                                  onClick={() => openWhatsApp(phone)}
+                                  style={{ flexShrink: 0, padding: '0.3rem 0.7rem', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(37,211,102,0.15)', border: '1px solid #25d366', color: '#25d366', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                                  title="Abrir WhatsApp normal"
+                                >
+                                  <MessageCircle size={12} />
+                                </button>
+                                <button
+                                  onClick={() => sendAccessLink(u)}
+                                  style={{ flexShrink: 0, padding: '0.3rem 0.7rem', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(0, 240, 255, 0.15)', border: '1px solid var(--neon-cyan)', color: 'var(--neon-cyan)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                                  title="Enviar link de acesso"
+                                >
+                                  <Send size={12} /> Acesso
+                                </button>
+                              </div>
                             ) : (
                               <span style={{ flexShrink: 0, fontSize: '0.72rem', color: '#ff4c4c' }}>Sem número</span>
                             )}
@@ -750,14 +777,24 @@ export default function Members() {
 
                         {/* WhatsApp */}
                         {(u.whatsapp || u.telefone) && (
-                          <button
-                            onClick={() => openWhatsApp(u.whatsapp || u.telefone || '')}
-                            className="icon-btn"
-                            title="Abrir WhatsApp"
-                            style={{ background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)', padding: '6px', borderRadius: '8px', color: '#25d366' }}
-                          >
-                            <MessageCircle size={16} />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => openWhatsApp(u.whatsapp || u.telefone || '')}
+                              className="icon-btn"
+                              title="Abrir WhatsApp"
+                              style={{ background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)', padding: '6px', borderRadius: '8px', color: '#25d366' }}
+                            >
+                              <MessageCircle size={16} />
+                            </button>
+                            <button
+                              onClick={() => sendAccessLink(u)}
+                              className="icon-btn"
+                              title="Enviar Link de Acesso"
+                              style={{ background: 'rgba(0, 240, 255, 0.1)', border: '1px solid rgba(0, 240, 255, 0.3)', padding: '6px', borderRadius: '8px', color: 'var(--neon-cyan)' }}
+                            >
+                              <Send size={16} />
+                            </button>
+                          </>
                         )}
 
                         {/* Toggle ativo / inativo */}
