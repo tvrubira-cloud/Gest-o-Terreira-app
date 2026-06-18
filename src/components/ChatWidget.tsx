@@ -120,6 +120,7 @@ export default function ChatWidget() {
           title="Falar com o Assistente"
         >
           <MessageSquare size={24} />
+          <span style={{ fontWeight: 'bold', fontSize: '1rem' }}>Chat</span>
         </button>
       )}
     </div>

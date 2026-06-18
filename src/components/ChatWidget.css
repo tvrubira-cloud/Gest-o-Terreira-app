@@ -10,12 +10,13 @@
   background: var(--bg-grad-1);
   border: 1px solid var(--neon-cyan);
   color: #fff;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
+  height: 50px;
+  padding: 0 20px;
+  border-radius: 25px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   cursor: pointer;
   box-shadow: 0 4px 20px rgba(0, 200, 200, 0.4);
   transition: all 0.3s ease;
