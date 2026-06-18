@@ -60,8 +60,9 @@ serve(async (req: Request) => {
         'X-Title': 'Terreiras App Assistant',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash', // Modelo rápido e gratuito no OpenRouter
+        model: 'google/gemini-2.0-flash-lite-preview-02-05:free', // Modelo 100% gratuito
         messages: fullMessages,
+        max_tokens: 1000 // Limita o tamanho da resposta para evitar erro de saldo
       })
     })
 
