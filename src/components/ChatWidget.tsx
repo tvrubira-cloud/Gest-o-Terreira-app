@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Bot, User as UserIcon, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import './ChatWidget.css';
