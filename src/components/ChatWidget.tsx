@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Bot, User as UserIcon, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useStore } from '../store/useStore';
 import './ChatWidget.css';
 
 interface Message {
@@ -9,9 +10,29 @@ interface Message {
 }
 
 export default function ChatWidget() {
+  const currentTerreiro = useStore(state => state.getCurrentTerreiro());
+  const terreiroName = currentTerreiro?.name || '';
+
+  // Lógica para extrair o nome principal da casa para a persona
+  const getPersonaName = (name: string) => {
+    if (!name) return 'seu assistente virtual';
+    
+    // Procura por nomes conhecidos de Orixás ou Guias
+    const orixasGuias = /(Pai \w+|Mãe \w+|Caboclo \w+|Exu \w+|Oyá|Oxum|Ogum|Xangô|Iemanjá|Oxóssi|Iansã|Oxalá|Nanã|Obaluaê|Omolu|Logun Edé|Ossain|Ewa|Obá)/i;
+    const match = name.match(orixasGuias);
+    if (match) return match[0];
+
+    // Fallback: Remove palavras genéricas e pega a primeira palavra restante
+    const nameWithoutGeneric = name.replace(/(Terreiro|Centro|Tenda|Casa|Ilê|Reino|Cabana|de|da|do|das|dos|Umbanda|Candomblé|Nação|Kimbanda|Quimbanda|e|-)/gi, '').trim();
+    const words = nameWithoutGeneric.split(' ').filter(w => w.length > 0);
+    return words.length > 0 ? words[0] : 'seu assistente virtual';
+  };
+
+  const personaName = getPersonaName(terreiroName);
+
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Olá! Sou seu assistente virtual. Como posso ajudar com o Terreiras App hoje?' }
+    { role: 'assistant', content: `Olá! Sou ${personaName}, seu assistente virtual. Como posso ajudar com o Terreiras App hoje?` }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
