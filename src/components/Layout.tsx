@@ -7,6 +7,7 @@ import bgImage from '../assets/bg.png';
 import logo from '../assets/nova logo.png';
 import '../App.css';
 import NotificationGate from './NotificationGate';
+import ChatWidget from './ChatWidget';
 
 export default function Layout() {
   const currentUser = useStore(state => state.currentUser);
@@ -469,6 +470,9 @@ export default function Layout() {
           </div>
         </main>
       </div>
+
+      {/* ASSISTENTE DE IA (Apenas Admins) */}
+      {isAdmin && <ChatWidget />}
 
       {/* BOTAO WHATSAPP SUPORTE */}
       <a href="https://wa.me/554898237206" target="_blank" rel="noopener noreferrer" style={{ position: 'fixed', bottom: '24px', right: '24px', background: '#25d366', color: '#fff', borderRadius: '50px', padding: '12px 20px', textDecoration: 'none', fontWeight: 'bold', zIndex: 9999, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
