@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "339179730980",
+    "project_id": "orunapp-75f53",
+    "storage_bucket": "orunapp-75f53.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:339179730980:android:6939fa4aa92a0c888200b1",
+        "android_client_info": {
+          "package_name": "com.orunapp.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7QemK4XlPEPqixVBhl7NqNYojlFzOC2s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
