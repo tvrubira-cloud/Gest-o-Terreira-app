@@ -4,7 +4,7 @@ import { LayoutDashboard, Users, Calendar, Settings, LogOut, Hexagon, Search, Be
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import bgImage from '../assets/bg.png';
-import logo from '../assets/nova logo.png';
+import logo from '../assets/nova-logo.png';
 import '../App.css';
 import NotificationGate from './NotificationGate';
 import ChatWidget from './ChatWidget';
