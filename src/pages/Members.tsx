@@ -35,6 +35,7 @@ export default function Members() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [showWhatsAppPanel, setShowWhatsAppPanel] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [pendingAccessLink, setPendingAccessLink] = useState<{ name: string; phone: string } | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [companheiroDropdown, setCompanheiroDropdown] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -241,22 +242,12 @@ export default function Members() {
 
       showToast('Dados salvos com sucesso!');
 
-      // Ao cadastrar um membro NOVO, oferece enviar o link de acesso ao app via WhatsApp
+      // Ao cadastrar um membro NOVO, guarda os dados para oferecer o envio do link depois,
+      // sem bloquear ou interferir no fluxo de salvamento.
       if (isNewUser) {
         const phone = (editingUser.whatsapp || editingUser.telefone || '').trim();
         if (phone) {
-          const wantsToSend = window.confirm(
-            'Membro cadastrado! Deseja enviar o link de acesso ao app via WhatsApp agora?'
-          );
-          if (wantsToSend) {
-            const accessMsg =
-              `Olá, ${editingUser.nomeCompleto || ''}! 🙏\n\n` +
-              `Seu cadastro no OrunApp foi realizado.\n\n` +
-              `Para acessar o app, baixe e instale por este link:\n` +
-              `https://www.orunapp.com.br/baixar\n\n` +
-              `Use seu CPF e a senha cadastrada para entrar. Qualquer dúvida, fale com a administração da casa.`;
-            openWhatsApp(phone, accessMsg);
-          }
+          setPendingAccessLink({ name: editingUser.nomeCompleto || '', phone });
         }
       }
     } catch (err: any) {
@@ -405,6 +396,52 @@ export default function Members() {
           boxShadow: '0 4px 24px rgba(0,255,136,0.2)'
         }}>
           <CheckCircle size={20} /> {toast}
+        </div>
+      )}
+
+      {/* Oferta de envio do link de acesso ao app — não bloqueia o fluxo */}
+      {pendingAccessLink && (
+        <div style={{
+          position: 'fixed', bottom: '2rem', left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(37,211,102,0.12)',
+          border: '1px solid #25d366', color: '#25d366', padding: '0.9rem 1.5rem',
+          borderRadius: 12, fontWeight: 600, fontSize: '0.9rem',
+          display: 'flex', alignItems: 'center', gap: '1rem',
+          zIndex: 9999, backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 24px rgba(37,211,102,0.2)'
+        }}>
+          <span>Enviar link de acesso ao app para {pendingAccessLink.name || 'o membro'}?</span>
+          <button
+            type="button"
+            onClick={() => {
+              const accessMsg =
+                `Olá, ${pendingAccessLink.name}! 🙏\n\n` +
+                `Seu cadastro no OrunApp foi realizado.\n\n` +
+                `Para acessar o app, baixe e instale por este link:\n` +
+                `https://www.orunapp.com.br/baixar\n\n` +
+                `Use seu CPF e a senha cadastrada para entrar. Qualquer dúvida, fale com a administração da casa.`;
+              openWhatsApp(pendingAccessLink.phone, accessMsg);
+              setPendingAccessLink(null);
+            }}
+            style={{
+              background: '#25d366', color: '#000', border: 'none',
+              padding: '0.5rem 1rem', borderRadius: 8, fontWeight: 700,
+              cursor: 'pointer', fontSize: '0.85rem', flexShrink: 0,
+            }}
+          >
+            Enviar
+          </button>
+          <button
+            type="button"
+            onClick={() => setPendingAccessLink(null)}
+            style={{
+              background: 'transparent', color: '#25d366', border: '1px solid #25d36655',
+              padding: '0.5rem 0.8rem', borderRadius: 8, fontWeight: 600,
+              cursor: 'pointer', fontSize: '0.85rem', flexShrink: 0,
+            }}
+          >
+            Agora não
+          </button>
         </div>
       )}
 
