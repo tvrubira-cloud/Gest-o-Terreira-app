@@ -14,6 +14,7 @@ import Financial from './pages/Financial';
 import SpiritualHub from './pages/SpiritualHub';
 import Broadcast from './pages/Broadcast';
 import Plans from './pages/Plans';
+import DownloadApp from './pages/DownloadApp'; // ← NOVO
 import { useStore, dbToUser } from './store/useStore';
 import { supabase } from './lib/supabase';
 
@@ -32,7 +33,7 @@ function App() {
       // 1. Restore session from localStorage first
       const session = localStorage.getItem('terreiro-session');
       let restoredTerreiroId = '';
-      
+
       if (session) {
         try {
           const { userId, terreiroId } = JSON.parse(session);
@@ -68,12 +69,12 @@ function App() {
 
   if (restoring) {
     return (
-      <div style={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        background: '#05050A', 
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#05050A',
         color: '#00f0ff',
         fontFamily: 'Inter, sans-serif',
         fontSize: '1.2rem',
@@ -97,6 +98,7 @@ function App() {
           {/* Rotas públicas — sem autenticação */}
           <Route path="/login" element={<Login />} />
           <Route path="/cadastro" element={<PublicRegister />} /> {/* ← NOVO */}
+          <Route path="/baixar" element={<DownloadApp />} /> {/* ← NOVO */}
 
           {/* Rotas protegidas — dentro do Layout autenticado */}
           <Route path="/" element={<Layout />}>
