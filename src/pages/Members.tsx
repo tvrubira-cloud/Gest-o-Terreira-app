@@ -250,6 +250,10 @@ export default function Members() {
           setPendingAccessLink({ name: editingUser.nomeCompleto || '', phone });
         }
       }
+
+      // Volta para a lista de membros automaticamente, para deixar claro que salvou.
+      // A faixa de "enviar link" continua aparecendo por cima da lista normalmente.
+      setView('LIST');
     } catch (err: any) {
       console.error('Erro ao salvar:', err);
       alert(`Erro ao salvar os dados: ${err.message || 'Verifique sua conexão e tente novamente.'}`);
