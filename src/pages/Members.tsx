@@ -250,7 +250,7 @@ export default function Members() {
           );
           if (wantsToSend) {
             const accessMsg =
-              `Olá, ${editingUser.name || ''}! 🙏\n\n` +
+              `Olá, ${editingUser.nomeCompleto || ''}! 🙏\n\n` +
               `Seu cadastro no OrunApp foi realizado.\n\n` +
               `Para acessar o app, baixe e instale por este link:\n` +
               `https://www.orunapp.com.br/baixar\n\n` +
