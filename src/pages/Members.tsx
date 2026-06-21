@@ -231,6 +231,7 @@ export default function Members() {
     if (!editingUser || isSaving) return;
 
     setIsSaving(true);
+    const isNewUser = !editingUser.id;
     try {
       if (editingUser.id) {
         await updateUser(editingUser.id, editingUser);
@@ -239,6 +240,25 @@ export default function Members() {
       }
 
       showToast('Dados salvos com sucesso!');
+
+      // Ao cadastrar um membro NOVO, oferece enviar o link de acesso ao app via WhatsApp
+      if (isNewUser) {
+        const phone = (editingUser.whatsapp || editingUser.telefone || '').trim();
+        if (phone) {
+          const wantsToSend = window.confirm(
+            'Membro cadastrado! Deseja enviar o link de acesso ao app via WhatsApp agora?'
+          );
+          if (wantsToSend) {
+            const accessMsg =
+              `Olá, ${editingUser.name || ''}! 🙏\n\n` +
+              `Seu cadastro no OrunApp foi realizado.\n\n` +
+              `Para acessar o app, baixe e instale por este link:\n` +
+              `https://www.orunapp.com.br/baixar\n\n` +
+              `Use seu CPF e a senha cadastrada para entrar. Qualquer dúvida, fale com a administração da casa.`;
+            openWhatsApp(phone, accessMsg);
+          }
+        }
+      }
     } catch (err: any) {
       console.error('Erro ao salvar:', err);
       alert(`Erro ao salvar os dados: ${err.message || 'Verifique sua conexão e tente novamente.'}`);
