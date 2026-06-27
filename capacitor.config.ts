@@ -4,6 +4,7 @@ const config: CapacitorConfig = {
   appId: 'com.orunapp.orunapp',
   appName: 'orunapp',
   webDir: 'dist',
+  
   plugins: {
     CapacitorUpdater: {
       appId: 'com.orunapp.orunapp',
