@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:339179730980:android:6939fa4aa92a0c888200b1",
+        "mobilesdk_app_id": "1:339179730980:android:f66214136ef8f3cd8200b1",
         "android_client_info": {
-          "package_name": "com.orunapp.app"
+          "package_name": "com.orunapp.orunapp"
         }
       },
       "oauth_client": [],

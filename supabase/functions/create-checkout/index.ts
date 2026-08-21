@@ -8,9 +8,9 @@ const corsHeaders = {
 
 // Price IDs por plano e período
 const PRICE_IDS: Record<string, Record<string, string>> = {
-  ile:  { month: 'price_1TcScVHzk9cIblw9iVJRstc1', year: 'price_1TcSdbHzk9cIblw9Xkj4VaBP' },
-  axe:  { month: 'price_1TcSeqHzk9cIblw9YM4HgFzd', year: 'price_1TcSgXHzk9cIblw9DGRhbAIQ' },
-  orun: { month: 'price_1TcShRHzk9cIblw9bjWj5XNY', year: 'price_1TcSiyHzk9cIblw9FkVZuo54' },
+  ile:  { month: 'price_1U6hpWRgmFiYs7THhXwCCcm1', year: 'price_1U6htjRgmFiYs7THekJDgMWi' },
+  axe:  { month: 'price_1U6hwZRgmFiYs7THxOdmSNRB', year: 'price_1U6hzVRgmFiYs7THqBBxDKsn' },
+  orun: { month: 'price_1U6i21RgmFiYs7THHqdJdtjJ', year: 'price_1U6i4WRgmFiYs7THWtT1jIUL' },
 };
 
 Deno.serve(async (req) => {
